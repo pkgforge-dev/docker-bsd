@@ -40,6 +40,8 @@ about; a review named after a person finds what that person would trip over.
 | [`reviews/5-somebody-wiring-this-into-their-ci.md`](reviews/5-somebody-wiring-this-into-their-ci.md) | a platform engineer asking whether it is deterministic and whether it will still work unattended |
 | [`reviews/6-an-air-gapped-consumer.md`](reviews/6-an-air-gapped-consumer.md) | ⭐ somebody with no route to a registry, who can only carry files in |
 | [`reviews/7-does-this-project-deserve-to-exist.md`](reviews/7-does-this-project-deserve-to-exist.md) | ⛔ a skeptic who already has a cross toolchain and is asking why they would switch |
+| [`reviews/8-somebody-who-runs-the-published-image-and-nothing-else.md`](reviews/8-somebody-who-runs-the-published-image-and-nothing-else.md) | ⭐ a developer who ran one command and will never open this repository. Everything they learn, they learn from the image's behaviour |
+| [`reviews/9-somebody-auditing-what-this-image-pulls-in.md`](reviews/9-somebody-auditing-what-this-image-pulls-in.md) | ⛔ a person approving this for a team, asking what it downloads and whom it trusts |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a

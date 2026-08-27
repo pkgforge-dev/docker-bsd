@@ -21,10 +21,18 @@
 # unchecked filesystem, and the refusal is the useful behaviour: growing a
 # filesystem whose state is unknown is how a corrupt image is made bigger.
 #
-# Usage:
-#   sh grow-rootfs.sh IMAGE SIZE LABEL      e.g. rootfs.img 2G buildroot
+# ⭐ IT ALSO PUTS A FILE INSIDE, AND THAT IS NOT A SIDE ERRAND. The filesystem
+# is already extracted at that moment, so writing into it costs one debugfs
+# call and no second extract. The alternative measured on 2026-08-27 was
+# letting the GUEST download the same file through its emulated network stack,
+# which took longer than every other step in the build put together and did not
+# finish inside a runner's hour.
 #
-# Needs: sgdisk, e2fsck, resize2fs, dd, truncate.
+# Usage:
+#   sh grow-rootfs.sh IMAGE SIZE LABEL [FILE]
+#   e.g. rootfs.img 2G buildroot gcc14.tgz
+#
+# Needs: sgdisk, e2fsck, resize2fs, dd, truncate, and debugfs for the file.
 #
 # Exit codes: 0 grown, 1 it did not grow, 2 a prerequisite is missing.
 
@@ -33,9 +41,14 @@ set -eu
 IMG="${1:-}"
 SIZE="${2:-}"
 LABEL="${3:-}"
+INJECT="${4:-}"
 
-[ -n "$IMG" ] && [ -n "$SIZE" ] && [ -n "$LABEL" ] || {
-  printf 'grow-rootfs: usage: grow-rootfs.sh IMAGE SIZE LABEL\n' >&2; exit 2; }
+# ⚠ Written out rather than `A && B || C`, which is not if-then-else: the C
+# branch also runs when B fails. tests/run.sh carries the same note.
+if [ -z "$IMG" ] || [ -z "$SIZE" ] || [ -z "$LABEL" ]; then
+  printf 'grow-rootfs: usage: grow-rootfs.sh IMAGE SIZE LABEL [FILE]\n' >&2
+  exit 2
+fi
 [ -f "$IMG" ] || { printf 'grow-rootfs: no such image: %s\n' "$IMG" >&2; exit 2; }
 
 for t in sgdisk e2fsck resize2fs dd truncate; do
@@ -58,8 +71,10 @@ sgdisk -d 1 -n "1:2048:0" -c "1:$LABEL" -t 1:8300 "$IMG" >/dev/null
 
 FIRST=$(sgdisk -i 1 "$IMG" | sed -n 's/^First sector: \([0-9]*\).*/\1/p')
 LAST=$(sgdisk -i 1 "$IMG" | sed -n 's/^Last sector: \([0-9]*\).*/\1/p')
-[ -n "$FIRST" ] && [ -n "$LAST" ] || {
-  printf 'grow-rootfs: could not read the partition bounds back\n' >&2; exit 1; }
+if [ -z "$FIRST" ] || [ -z "$LAST" ]; then
+  printf 'grow-rootfs: could not read the partition bounds back\n' >&2
+  exit 1
+fi
 
 NAME=$(sgdisk -i 1 "$IMG" | sed -n "s/^Partition name: '\(.*\)'/\1/p")
 [ "$NAME" = "$LABEL" ] || {
@@ -74,6 +89,26 @@ COUNT=$((LAST - FIRST + 1))
 dd if="$IMG" of=fs.tmp bs=512 skip="$FIRST" count="$COUNT" status=none
 e2fsck -fy fs.tmp >/dev/null 2>&1 || true
 resize2fs fs.tmp
+
+# ⛔ WRITTEN IN, THEN READ BACK. debugfs reports most failures on stderr and
+# still exits 0, so its exit code is not evidence. The `stat` afterwards is:
+# if the file is not there, this stops rather than shipping an image whose
+# provisioning step will fail later for a reason nobody will connect to here.
+if [ -n "$INJECT" ]; then
+  command -v debugfs >/dev/null 2>&1 || {
+    printf 'grow-rootfs: debugfs is not on PATH and a file was asked for\n' >&2
+    exit 2; }
+  [ -f "$INJECT" ] || {
+    printf 'grow-rootfs: no such file to write in: %s\n' "$INJECT" >&2; exit 2; }
+  base=$(basename "$INJECT")
+  debugfs -w -R "write $INJECT $base" fs.tmp >/dev/null 2>&1 || true
+  if ! debugfs -R "stat $base" fs.tmp 2>/dev/null | grep -q 'Inode:'; then
+    printf 'grow-rootfs: %s did not appear inside the filesystem\n' "$base" >&2
+    exit 1
+  fi
+  printf 'grow-rootfs: wrote %s into the guest root\n' "$base"
+fi
+
 dd if=fs.tmp of="$IMG" bs=512 seek="$FIRST" conv=notrunc status=none
 rm -f fs.tmp
 

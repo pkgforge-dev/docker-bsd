@@ -28,6 +28,8 @@ ARG ROOTFS_URL
 ARG ROOTFS_SHA256
 ARG ROOT_LABEL
 ARG ROOTFS_SIZE
+ARG PACKAGE_URL
+ARG PACKAGE_SHA256
 
 RUN apk add --no-cache curl xz e2fsprogs e2fsprogs-extra sgdisk
 
@@ -46,13 +48,29 @@ RUN curl -fsSL -o rootfs.img.xz "$ROOTFS_URL" \
  && echo "$ROOTFS_SHA256  rootfs.img.xz" | sha256sum -c - \
  && xz -d rootfs.img.xz
 
+# ⭐ THE GUEST'S PACKAGE IS FETCHED HERE, BY LINUX, AT THE CONTAINER'S OWN
+# NETWORK SPEED. Letting the guest fetch it through an emulated network stack
+# was measured on 2026-08-27 and took longer than every other step in this file
+# put together. ⛔ The URL carries a version and the digest is checked, which
+# `pkg_add <name>` inside the guest could do neither of.
+RUN if [ -n "$PACKAGE_URL" ]; then \
+      curl -fsSL -o guest-package.tgz "$PACKAGE_URL" \
+   && echo "$PACKAGE_SHA256  guest-package.tgz" | sha256sum -c -; \
+    else \
+      echo "no package asked for"; \
+    fi
+
 # ⭐ GROWN HERE, BY LINUX, BECAUSE THE GUEST'S ROOT IS ext2 AND NOT FFS. A BSD
 # filesystem would need a booted BSD to resize it. ⚠ An empty ROOTFS_SIZE means
 # leave it alone, which is what the rescue variant wants: it is a shell in
 # seconds and nothing is ever installed into it.
+#
+# ⚠ The package goes in on the same pass. The filesystem is already extracted
+# at that point, so writing a file into it is free.
 COPY images/netbsd/grow-rootfs.sh /grow-rootfs.sh
 RUN if [ -n "$ROOTFS_SIZE" ]; then \
-      sh /grow-rootfs.sh rootfs.img "$ROOTFS_SIZE" "$ROOT_LABEL"; \
+      sh /grow-rootfs.sh rootfs.img "$ROOTFS_SIZE" "$ROOT_LABEL" \
+         "$( [ -n "$PACKAGE_URL" ] && echo /art/guest-package.tgz || true )"; \
     else \
       echo "grow-rootfs: no size asked for, leaving the root filesystem alone"; \
     fi
@@ -70,7 +88,6 @@ FROM ${BASE} AS provision
 
 ARG ROOT_LABEL
 ARG PACKAGES
-ARG PKG_PATH
 
 RUN apk add --no-cache qemu-system-x86_64 python3
 
@@ -81,8 +98,14 @@ COPY images/netbsd/guest.py /opt/bsd/guest.py
 COPY images/netbsd/entrypoint.sh /opt/bsd/entrypoint.sh
 
 ENV BSD_ROOT_LABEL="${ROOT_LABEL}"
-ENV BSD_NET="user"
 ENV BSD_CMD_TIMEOUT="3000"
+
+# ⛔ NO NETWORK IN THIS STAGE, ON PURPOSE. The package is already inside the
+# guest's filesystem, so installing it is a local file operation. A stage that
+# could still reach a repository is a stage that might quietly start doing so
+# again, and the difference would show up as an hour of build time nobody
+# ordered.
+ENV BSD_NET="none"
 
 # ⛔ THE GUEST SYNCS AND REMOUNTS ITS ROOT READ ONLY BEFORE THE EMULATOR IS
 # STOPPED. The console driver's stop sends `halt -p` and then terminates the
@@ -91,7 +114,7 @@ ENV BSD_CMD_TIMEOUT="3000"
 # repository where an unclean shutdown would be baked into a release.
 RUN chmod +x /opt/bsd/entrypoint.sh \
  && if [ -n "$PACKAGES" ]; then \
-      /opt/bsd/entrypoint.sh sh -c "export PKG_PATH=$PKG_PATH; pkg_add -U $PACKAGES && df -h / && sync && sync && mount -u -r /"; \
+      /opt/bsd/entrypoint.sh sh -c "pkg_add -U $PACKAGES && rm -f $PACKAGES && df -h / && sync && sync && mount -u -r /"; \
     else \
       echo "provision: no packages asked for"; \
     fi

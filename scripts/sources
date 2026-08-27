@@ -64,6 +64,8 @@
 #   sh scripts/sources --runtime-packages VARIANT      empty means install none
 #   sh scripts/sources --runtime-pkg-path              the package repository
 #   sh scripts/sources --runtime-net VARIANT           none | user
+#   sh scripts/sources --runtime-package-url VARIANT
+#   sh scripts/sources --runtime-package-sha256 VARIANT
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -145,18 +147,37 @@ SMOL_BUILD_LABEL="buildroot"
 #
 # ⭐ It is user mode, so it needs no privilege and opens no port on the host,
 # and `--network none` on the container still cuts it off completely.
+# ⚠ The binary package repository the guest installs from. It is a MOVING
+# collection by design, which is why the packages are installed once at build
+# time and shipped, rather than fetched by each consumer at run time.
+SMOL_PKG_PATH="https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/11.0/All"
+
 SMOL_RESCUE_NET="none"
 SMOL_BUILD_NET="user"
 
 SMOL_RESCUE_SIZE=""
 SMOL_RESCUE_PACKAGES=""
+SMOL_RESCUE_PKG_URL=""
+SMOL_RESCUE_PKG_PINNED_SHA256=""
 SMOL_BUILD_SIZE="2G"
-SMOL_BUILD_PACKAGES="gcc14"
+SMOL_BUILD_PACKAGES="/guest-package.tgz"
 
-# ⚠ The binary package repository the guest installs from. It is a MOVING
-# collection by design, which is why the packages are installed once at build
-# time and shipped, rather than fetched by each consumer at run time.
-SMOL_PKG_PATH="https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/11.0/All"
+# ⭐ THE PACKAGE IS FETCHED BY LINUX AND WRITTEN INTO THE GUEST'S FILESYSTEM
+# BEFORE IT BOOTS, and that is a measured decision rather than a tidy one.
+# Fetching it from inside the guest, through the emulated network stack, took
+# longer than every other step in the build put together and did not finish
+# inside a runner's hour. The same file over the container's own network is a
+# few seconds.
+#
+# ⭐ It also closes a hole: a version in the URL is a pin, and a digest beside
+# it is a second one. `pkg_add gcc14` resolved a moving name over TLS and
+# verified nothing.
+#
+# ⚠ ONE PACKAGE, NOT A LIST, and that is a real limit. gcc14 declares no
+# dependencies at all, which is what makes a single file enough. A package that
+# has some would need its whole closure resolved here, and nothing does that.
+SMOL_BUILD_PKG_URL="$SMOL_PKG_PATH/gcc14-14.3.0nb1.tgz"
+SMOL_BUILD_PKG_PINNED_SHA256="93c5e1aeda6227915c6a4d70af5b55888760f5015608085617d53459cd76503f"
 
 ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
 
@@ -191,6 +212,28 @@ rootfs_size() {
     rescue) printf '%s\n' "$SMOL_RESCUE_SIZE" ;;
     build)  printf '%s\n' "$SMOL_BUILD_SIZE" ;;
     *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+package_url() {
+  case "$1" in
+    rescue) printf '%s
+' "$SMOL_RESCUE_PKG_URL" ;;
+    build)  printf '%s
+' "$SMOL_BUILD_PKG_URL" ;;
+    *) printf 'sources: unknown variant: %s
+' "$1" >&2; exit 2 ;;
+  esac
+}
+
+package_sha256() {
+  case "$1" in
+    rescue) printf '%s
+' "$SMOL_RESCUE_PKG_PINNED_SHA256" ;;
+    build)  printf '%s
+' "$SMOL_BUILD_PKG_PINNED_SHA256" ;;
+    *) printf 'sources: unknown variant: %s
+' "$1" >&2; exit 2 ;;
   esac
 }
 
@@ -283,7 +326,9 @@ case "${1:-}" in
   --runtime-packages)      shift; rootfs_packages "${1:-}" ;;
   --runtime-pkg-path)      printf '%s\n' "$SMOL_PKG_PATH" ;;
   --runtime-net)           shift; rootfs_net "${1:-}" ;;
+  --runtime-package-url)    shift; package_url "${1:-}" ;;
+  --runtime-package-sha256) shift; package_sha256 "${1:-}" ;;
   --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages --runtime-pkg-path or --runtime-net\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages --runtime-pkg-path --runtime-net --runtime-package-url or --runtime-package-sha256\n' >&2; exit 2 ;;
 esac

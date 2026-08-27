@@ -16,8 +16,8 @@ entries themselves. Do not add a "previous sessions" section.
 ## State
 
 ```text
-session started 2026-08-27T12:54:52Z
-baseline        this repository became standalone in this session
+session started 2026-08-27T17:00:00Z
+baseline        this repository published its first image that boots
 entries         total 20  open 18  blocked 0  done 2
 ```
 
@@ -30,113 +30,118 @@ hand to make a check pass; fix whichever file is wrong. ⭐
 | --- | --- |
 | repository | `pkgforge-dev/docker-bsd`, public, 0BSD |
 | work model | todo. [`../docs/methodology/work-todo.md`](../docs/methodology/work-todo.md) |
-| publishes | OCI images for four BSDs to `ghcr.io`. ⚠ Not yet anything bootable |
+| publishes | ⭐ **`ghcr.io/pkgforge-dev/netbsd`, which boots**, plus OCI images for four userlands |
 | the local gate | ⭐ `sh scripts/common/check-gate.sh --fast`, then `sh tests/run.sh` |
-| CI | `.github/workflows/ci.yml`, static only. ⛔ It cannot run a BSD image and does not pretend to |
+| CI | `ci.yml` static, and ⭐ **`image-netbsd.yml`, which builds a BSD, runs it and asserts on it** |
 
 ---
 
 ## ⭐ The headline, and it is measured
 
-⛔ **A FreeBSD userland runs on a Windows host with no nesting**, on the
-machine's own hypervisor, from an unelevated shell. A container runs inside it.
+⛔ **A stranger with a container engine and nothing else can now run a BSD**, in
+one command, from a public registry.
 
-The commands, the numbers and the conditions are in
-[`../docs/LIMITS.md`](../docs/LIMITS.md) and the experiments that produced them
-are in [`../experiments/`](../experiments/README.md). ⛔ **They are not repeated
-here**: one fact, one home.
+```bash
+podman run --rm -it ghcr.io/pkgforge-dev/netbsd:latest sh
+```
+
+Built and proved on a free `ubuntu-latest` runner. The seconds, the sizes and
+the conditions are in [`../docs/LIMITS.md`](../docs/LIMITS.md). ⛔ **They are
+not repeated here**: one fact, one home.
 
 ---
 
 ## What this session did
 
-**2026-08-27. Two things, and the second was not planned.**
+**2026-08-27 into 2026-08-28.**
 
-1. ⭐ **Nine experiments**, run rather than written, covering every route
-   from a Windows host to a booted BSD. Each is committed with its result,
-   including the two that failed and the one that printed a false success.
-2. ⭐ **This repository became standalone.** It was developed beside
-   `Azathothas/ToolKit` and borrowed that tree's checks, conventions and
-   methodology. Those are now vendored here, adapted, and the record that
-   tracked this work moved with them.
-
-⚠ **What that second half changed, concretely:** the gate, the conventions, the
-methodology and the security rules are this repository's own copies. ⛔ **One
-reference remains deliberately**, and it is pinned:
-[`../docs/vendored.md`](../docs/vendored.md) records it.
+1. ⭐ **`IMG-01` closed.** The measured route is packaged, pinned, published and
+   anonymously pullable. ⛔ **Its guard was seen to fail**: CI asks the guest to
+   `exit 3` and requires exactly 3 back, so the acceptance is not theatre.
+2. ⭐ **A second variant with a real userland**, `netbsd:build`, carrying
+   `uname`, `make`, `pkg_add` and `pkgin`, with a root filesystem grown from
+   Linux and a compiler installed at build time.
+3. ⭐ **A timing harness this project did not have.**
+   [`../scripts/time-image`](../scripts/time-image) runs anywhere, reports a
+   median over several runs, and ⛔ **says which accelerator actually ran**
+   rather than which flag was passed.
+4. ⛔ **Four defects found by running rather than by reading**, each recorded
+   where it was found: a console wait that matches the previous command's
+   marker, a network device that is accepted and never attaches when its two
+   arguments are ordered the other way, an accelerator probe reading a stream
+   that had already been discarded, and a guest that stops in single user mode
+   with a read only root and no obvious sign of either.
 
 ---
 
 ## ⭐ The work order
 
-⛔ **The largest defect in this project is invisible from the inside: it
-works, and nobody can use it.** A route to a BSD shell that needs nothing but a
-container engine is measured, and no published image does it.
+⛔ **The largest remaining defect is that this project still cannot justify
+itself.** Anybody can run it now. Nothing here has compiled anything and timed
+it, so a developer with a cross toolchain still has no evidence to switch on.
 
-⛔ **The second largest is that the project cannot justify itself.** Nothing
-here has compiled anything, so a developer with a cross toolchain has no
-evidence to switch on.
+### 1. ⛔ `PERF-01`, then `PERF-02`, then `PERF-03`. The entries that can end this project
 
-Everything below is ordered by those two.
+⭐ **They are now unblocked and they are first.** `IMG-01` gave them something
+to run and the build variant gave them something to compile with.
 
-### 1. ⛔ `IMG-01`, then `IMG-02`. The only P0s
+⚠ **Two facts from this session change how they must be approached**, and both
+are in [`../docs/LIMITS.md`](../docs/LIMITS.md):
 
-`IMG-01` is the promise in one command:
+- ⛔ **Boot time is not throughput, and the accelerator behaved differently in
+  the two places it was measured.** On the laptop the device roughly halves the
+  time to a shell. On the runner the first measurement said the opposite, and
+  that measurement did not record which accelerator ran. A benchmark that
+  cannot say which one it used is not a benchmark.
+- ⛔ **The guest's emulated network is slow enough to dominate any task that
+  uses it.** Installing one compiler through it took longer than everything
+  else in the build put together, and `pkgin` did not finish at all in fifteen
+  minutes. ⚠ A benchmark that fetches its dependencies is measuring the
+  network.
 
-```bash
-podman run --rm -it ghcr.io/pkgforge-dev/freebsd:latest sh
-```
+### 2. ⛔ `IMG-02`, which is close and is not closed
 
-`IMG-02` is that promise being worth keeping: a real userland with a package
-manager, rather than the 20 MB rescue shell the measured route boots today.
-
-⛔ **In that order.** Shipping `IMG-02` first builds a development
-environment nobody can start.
-
-### 2. ⛔ `PERF-02`, then `PERF-03`. The entries that can end this project
-
-Two users, one program, one matrix: a developer cross-compiling on Linux against
-a developer using this image, over a real C, C++, Go and Rust project.
-⛔ **The bar is 5 percent**, and failing it publishes the ratio rather than
-quietly dropping the bar.
-
-⚠ `PERF-01` is the smaller version of the same question and comes first
-only because it is cheaper.
+The userland is real, the package manager works, and the compiler is in the
+image. ⛔ **What is missing is the number.** The entry requires a recorded build
+time, and that is `PERF-01`.
 
 ### 3. ⚠ `IMG-03`, `INF-04`, `INF-06`. The three that decide whether it is usable
 
-- `IMG-03`: ⛔ `-v`, `-p` and `-e` reach the container and stop there.
-- `INF-04`: ⛔ every route starts with a network fetch, so an air-gapped
-  consumer has nothing at all.
-- `INF-06`: ⛔ everything consumed here belongs to somebody else, and a
-  fetch that returns an error page must not be imported as a root filesystem.
+- `IMG-03`: ⛔ `-v`, `-p` and `-e` reach the container and stop there. ⭐ **It
+  moved up in value this session**: nothing a consumer builds inside the guest
+  can come out, which makes the build variant a demonstration rather than a
+  tool.
+- `INF-04`: ⛔ every route still starts with a network fetch.
+- `INF-06`: ⛔ two artefacts sit behind moving pointers, and one build-time
+  package fetch has no digest at all.
+  [`../HISTORY/reviews/9-somebody-auditing-what-this-image-pulls-in.md`](../HISTORY/reviews/9-somebody-auditing-what-this-image-pulls-in.md).
 
-### 4. ⭐ `PORT-01` and `INF-05`. Turning one datapoint into a guarantee
+### 4. ⭐ `PORT-01`, which is now one command
 
-Every portability claim is inferred from one Windows laptop. `PORT-01` is one
-command per host; `INF-05` is the matrix that makes it a standing guarantee
-instead of a one-off.
+[`../scripts/time-image`](../scripts/time-image) is that command. It takes an
+image reference, runs anywhere, and prints a comparable figure. ⚠ The entry
+closes when somebody has run it somewhere that is neither this laptop nor a
+GitHub runner.
 
-### 5. ⚠ `INF-07`, and it is partly done
+### 5. ⚠ `INF-08`, filed this session and deliberately not fixed
 
-The consumer-facing pages have had one tightening pass. ⛔ They still carry
-narrative that belongs in [`../HISTORY/`](../HISTORY/README.md), and the entry
-stays open until a page can be read as a manual.
+`Console.run()` counts prompts with a pattern that can only ever match once, so
+every call burns its whole timeout and returns the right answer late. ⛔ **Not
+patched in passing**, because that file is the single copy of two measured tty
+rules and its twin has to move with it.
 
 ### 6. The `OPT-*` entries, which are levers and not goals
 
-⛔ **Do not pull one before `PERF-02` says which is stuck.** Optimising a
-workload that was already fine is how a month is spent for nothing.
+⛔ **Do not pull one before `PERF-02` says which is stuck.** ⚠ Two now have
+evidence behind them: the image is 155 MB to provide a shell, and the
+provisioning step downloads a package through an emulated network stack when
+the container around it could have downloaded it at Linux speed.
 
 ### 7. ⚠ `BSD-01`, which was the headline and is not any more
 
-⭐ The container route overtook it: more hosts, less privilege, faster to a
-shell. It stays open because its acceptance command has not returned 0.
-
-⛔ **Its blocker is a guest fault, not a client one.** `podman system
-service`, a long-running multithreaded Go daemon, panics the FreeBSD kernel in
-`_umtx_op`, which is what a Go scheduler parks threads on. Everything underneath
-it works.
+⭐ The container route overtook it. It stays open because its acceptance command
+has not returned 0, and its blocker is a guest kernel fault rather than a client
+one.
 
 ---
 
@@ -148,9 +153,9 @@ cannot fork.
 
 | the question | the ruling |
 | --- | --- |
-| what does the first published image ship, and what is it called | ⭐ **NetBSD, named `netbsd`.** Ship now rather than waiting for FreeBSD |
-| what is the performance baseline measured against | ⛔ **a free GitHub runner**, both users in the same job. Not a BSD host, not the developer's laptop |
-| what base does the container use | ⛔ **build towards `scratch`.** Alpine is a stepping stone. A consumer who cannot debug it opens an issue |
+| what does the first published image ship, and what is it called | ⭐ **NetBSD, named `netbsd`.** ⭐ **Shipped** |
+| what is the performance baseline measured against | ⛔ **a free GitHub runner**, both users in the same job |
+| what base does the container use | ⛔ **build towards `scratch`.** Alpine is a stepping stone |
 | what if 5 percent cannot be met | ⛔ **keep optimising.** The entry does not close by repositioning the project |
 
 ⚠ **One constraint from those answers reaches every entry**, and it is the
