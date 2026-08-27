@@ -26,8 +26,10 @@ ARG KERNEL_URL
 ARG KERNEL_SHA256
 ARG ROOTFS_URL
 ARG ROOTFS_SHA256
+ARG ROOT_LABEL
+ARG ROOTFS_SIZE
 
-RUN apk add --no-cache curl xz
+RUN apk add --no-cache curl xz e2fsprogs e2fsprogs-extra sgdisk
 
 WORKDIR /art
 
@@ -44,6 +46,56 @@ RUN curl -fsSL -o rootfs.img.xz "$ROOTFS_URL" \
  && echo "$ROOTFS_SHA256  rootfs.img.xz" | sha256sum -c - \
  && xz -d rootfs.img.xz
 
+# ⭐ GROWN HERE, BY LINUX, BECAUSE THE GUEST'S ROOT IS ext2 AND NOT FFS. A BSD
+# filesystem would need a booted BSD to resize it. ⚠ An empty ROOTFS_SIZE means
+# leave it alone, which is what the rescue variant wants: it is a shell in
+# seconds and nothing is ever installed into it.
+COPY images/netbsd/grow-rootfs.sh /grow-rootfs.sh
+RUN if [ -n "$ROOTFS_SIZE" ]; then \
+      sh /grow-rootfs.sh rootfs.img "$ROOTFS_SIZE" "$ROOT_LABEL"; \
+    else \
+      echo "grow-rootfs: no size asked for, leaving the root filesystem alone"; \
+    fi
+
+# ── provision: install into the guest by BOOTING it ────────────────────────
+#
+# ⛔ A CONSUMER MUST NOT HAVE TO INSTALL A COMPILER. `--rm` throws away
+# everything they install, so a package added at run time is paid for on every
+# single run and owned by nobody. It goes in here, once, and ships.
+#
+# ⚠ THIS STAGE RUNS AN EMULATOR INSIDE A CONTAINER BUILD, unaccelerated,
+# because a build has no /dev/kvm. It is the slowest step in this file by a
+# wide margin and it is why the timeout on the workflow job is generous.
+FROM ${BASE} AS provision
+
+ARG ROOT_LABEL
+ARG PACKAGES
+ARG PKG_PATH
+
+RUN apk add --no-cache qemu-system-x86_64 python3
+
+COPY --from=fetch /art/kernel /guest/kernel
+COPY --from=fetch /art/rootfs.img /guest/rootfs.img
+COPY experiments/lib/console.py /opt/bsd/console.py
+COPY images/netbsd/guest.py /opt/bsd/guest.py
+COPY images/netbsd/entrypoint.sh /opt/bsd/entrypoint.sh
+
+ENV BSD_ROOT_LABEL="${ROOT_LABEL}"
+ENV BSD_NET="user"
+ENV BSD_CMD_TIMEOUT="3000"
+
+# ⛔ THE GUEST SYNCS AND REMOUNTS ITS ROOT READ ONLY BEFORE THE EMULATOR IS
+# STOPPED. The console driver's stop sends `halt -p` and then terminates the
+# process, and a filesystem still holding dirty buffers at that moment is a
+# filesystem shipped in an unknown state. This is the one place in this
+# repository where an unclean shutdown would be baked into a release.
+RUN chmod +x /opt/bsd/entrypoint.sh \
+ && if [ -n "$PACKAGES" ]; then \
+      /opt/bsd/entrypoint.sh sh -c "export PKG_PATH=$PKG_PATH; pkg_add -U $PACKAGES && df -h / && sync && sync && mount -u -r /"; \
+    else \
+      echo "provision: no packages asked for"; \
+    fi
+
 # ── what ships ──────────────────────────────────────────────────────────────
 FROM ${BASE}
 
@@ -52,6 +104,8 @@ ARG KERNEL_SHA256
 ARG ROOTFS_URL
 ARG ROOTFS_SHA256
 ARG ROOT_LABEL
+ARG ROOTFS_SIZE
+ARG PACKAGES
 ARG VARIANT
 ARG SOURCE_COMMIT=unknown
 
@@ -64,7 +118,7 @@ LABEL org.opencontainers.image.title="netbsd" \
 RUN apk add --no-cache qemu-system-x86_64 python3
 
 COPY --from=fetch /art/kernel /guest/kernel
-COPY --from=fetch /art/rootfs.img /guest/rootfs.img
+COPY --from=provision /guest/rootfs.img /guest/rootfs.img
 
 # ⛔ THE ROOT LABEL IS BAKED, NOT GUESSED. It is the GPT partition name the
 # guest kernel is told to mount, it differs per variant, and a wrong one boots
@@ -84,6 +138,8 @@ RUN chmod +x /opt/bsd/entrypoint.sh \
       echo "image      netbsd"; \
       echo "variant    ${VARIANT}"; \
       echo "rootlabel  ${ROOT_LABEL}"; \
+      echo "rootsize   ${ROOTFS_SIZE:-as published}"; \
+      echo "packages   ${PACKAGES:-none}"; \
       echo "revision   ${SOURCE_COMMIT}"; \
       echo "kernel     ${KERNEL_URL}"; \
       echo "kernel     sha256:${KERNEL_SHA256}"; \

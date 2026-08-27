@@ -81,6 +81,9 @@ KERNEL_SHA=$(sh scripts/sources --runtime-kernel-sha256)
 ROOTFS_URL=$(sh scripts/sources --runtime-rootfs-url "$VARIANT")
 ROOTFS_SHA=$(sh scripts/sources --runtime-rootfs-sha256 "$VARIANT")
 ROOT_LABEL=$(sh scripts/sources --runtime-root-label "$VARIANT")
+ROOTFS_SIZE=$(sh scripts/sources --runtime-rootfs-size "$VARIANT")
+PACKAGES=$(sh scripts/sources --runtime-packages "$VARIANT")
+PKG_PATH=$(sh scripts/sources --runtime-pkg-path)
 REVISION=$(git rev-parse HEAD 2>/dev/null || echo unknown)
 
 printf 'build-netbsd\n'
@@ -103,6 +106,9 @@ if [ "$BUILD" = 1 ]; then
     --build-arg "ROOTFS_URL=$ROOTFS_URL" \
     --build-arg "ROOTFS_SHA256=$ROOTFS_SHA" \
     --build-arg "ROOT_LABEL=$ROOT_LABEL" \
+    --build-arg "ROOTFS_SIZE=$ROOTFS_SIZE" \
+    --build-arg "PACKAGES=$PACKAGES" \
+    --build-arg "PKG_PATH=$PKG_PATH" \
     --build-arg "VARIANT=$VARIANT" \
     --build-arg "SOURCE_COMMIT=$REVISION" \
     .

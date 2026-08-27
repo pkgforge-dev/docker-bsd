@@ -87,12 +87,26 @@ run_one() {
   fi
 }
 
-printf '36-time-image\n'
+printf 'time-image\n'
 printf '  engine   %s\n' "$ENGINE"
 printf '  image    %s\n' "$IMAGE"
 printf '  runs     %s\n' "$RUNS"
 printf '  device   %s\n' "$DEVICE"
 printf '  command  %s\n' "$COMMAND"
+
+# ⛔ WHICH ACCELERATOR ACTUALLY RAN, READ FROM A RUN AND NOT INFERRED FROM THE
+# FLAG. Handing in `--device /dev/kvm` does NOT mean the guest used it: the
+# node can be present and unopenable, in which case the image falls back to
+# emulation and the only difference the flag made was a slower start. A
+# comparison of "with the device" against "without" that does not know which
+# accelerator each side used is a comparison between two unknowns, and this
+# repository has published one of those and withdrawn it.
+#
+# ⚠ It is a separate, untimed run. It costs one extra boot and it is the
+# difference between a number and a claim.
+ACCEL=$( { run_one >/dev/null; } 2>&1 | sed -n 's/.*accel=\([a-z]*\).*/\1/p' | tail -1 )
+[ -n "$ACCEL" ] || ACCEL=unreported
+printf '  accel    %s\n' "$ACCEL"
 printf '\n'
 
 # ⚠ The samples go to a file rather than into a shell variable. A variable
@@ -146,8 +160,8 @@ MIN=$(sed -n '1p' "$TIMES.sorted")
 MAX=$(sed -n "${N}p" "$TIMES.sorted")
 rm -f "$TIMES" "$TIMES.sorted"
 
-printf 'RESULT image=%s device=%s answered=%s failed=%s median_ms=%s min_ms=%s max_ms=%s\n' \
-  "$IMAGE" "$DEVICE" "$N" "$FAILED" "$MEDIAN" "$MIN" "$MAX"
+printf 'RESULT image=%s device=%s accel=%s answered=%s failed=%s median_ms=%s min_ms=%s max_ms=%s\n' \
+  "$IMAGE" "$DEVICE" "$ACCEL" "$N" "$FAILED" "$MEDIAN" "$MIN" "$MAX"
 
 [ "$FAILED" -eq 0 ] || exit 1
 exit 0

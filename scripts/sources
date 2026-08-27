@@ -60,6 +60,9 @@
 #   sh scripts/sources --runtime-rootfs-url VARIANT
 #   sh scripts/sources --runtime-rootfs-sha256 VARIANT
 #   sh scripts/sources --runtime-root-label VARIANT
+#   sh scripts/sources --runtime-rootfs-size VARIANT   empty means do not grow
+#   sh scripts/sources --runtime-packages VARIANT      empty means install none
+#   sh scripts/sources --runtime-pkg-path              the package repository
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -122,6 +125,26 @@ SMOL_BUILD_URL="$SMOL_RELEASE/build-amd64.img.xz"
 SMOL_BUILD_PINNED_SHA256="04f85df4e5a9b7248bc481552cd6225157de546eba7e5f45f9dc128d1b2e7594"
 SMOL_BUILD_LABEL="buildroot"
 
+# ⛔ THE BUILD VARIANT IS GROWN AND PROVISIONED, AND THE TWO NUMBERS BELOW ARE
+# WHY. Measured 2026-08-27: the published build userland has 201 MB free, and
+# `pkg_add gcc14` fills it at 106 percent. A development environment that
+# cannot hold a compiler is not one, so the root filesystem is grown at build
+# time and the compiler goes in there rather than being a thing a consumer has
+# to install, wait for, and lose on the next `--rm`.
+#
+# ⚠ 2G IS A CHOICE AND NOT A MEASUREMENT. gcc14 is 107 MB compressed and about
+# a quarter of a gigabyte installed; the rest is room for whatever a consumer
+# is building. A bigger number is a bigger image on every consumer's disk.
+SMOL_RESCUE_SIZE=""
+SMOL_RESCUE_PACKAGES=""
+SMOL_BUILD_SIZE="2G"
+SMOL_BUILD_PACKAGES="gcc14"
+
+# ⚠ The binary package repository the guest installs from. It is a MOVING
+# collection by design, which is why the packages are installed once at build
+# time and shipped, rather than fetched by each consumer at run time.
+SMOL_PKG_PATH="https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/11.0/All"
+
 ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
 
 runtime_variants() { printf 'rescue\nbuild\n'; }
@@ -146,6 +169,22 @@ rootfs_label() {
   case "$1" in
     rescue) printf '%s\n' "$SMOL_RESCUE_LABEL" ;;
     build)  printf '%s\n' "$SMOL_BUILD_LABEL" ;;
+    *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+rootfs_size() {
+  case "$1" in
+    rescue) printf '%s\n' "$SMOL_RESCUE_SIZE" ;;
+    build)  printf '%s\n' "$SMOL_BUILD_SIZE" ;;
+    *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+rootfs_packages() {
+  case "$1" in
+    rescue) printf '%s\n' "$SMOL_RESCUE_PACKAGES" ;;
+    build)  printf '%s\n' "$SMOL_BUILD_PACKAGES" ;;
     *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
   esac
 }
@@ -216,7 +255,10 @@ case "${1:-}" in
   --runtime-rootfs-url)    shift; rootfs_url "${1:-}" ;;
   --runtime-rootfs-sha256) shift; rootfs_sha256 "${1:-}" ;;
   --runtime-root-label)    shift; rootfs_label "${1:-}" ;;
+  --runtime-rootfs-size)   shift; rootfs_size "${1:-}" ;;
+  --runtime-packages)      shift; rootfs_packages "${1:-}" ;;
+  --runtime-pkg-path)      printf '%s\n' "$SMOL_PKG_PATH" ;;
   --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 or --runtime-root-label\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages or --runtime-pkg-path\n' >&2; exit 2 ;;
 esac
