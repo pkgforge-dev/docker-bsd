@@ -15,12 +15,12 @@ what to do.
 | row | before | after |
 | --- | --- | --- |
 | **Elapsed** | 2026-08-27T17:00:00Z | about 7 hours |
-| **Commits** | `e025538` | six on `main`, pushed with admin bypass over a protected branch |
-| **Work** | 19 open, 2 P0 | ⭐ **`IMG-01` closed**, `IMG-02` most of the way, one new entry filed from a defect |
+| **Commits** | `e025538` | twelve on `main`, pushed with admin bypass over a protected branch |
+| **Work** | 19 open, 2 P0 | ⭐ **`IMG-01` closed**, `IMG-02` most of the way, two new entries filed from measurements |
 | **What it publishes** | four userlands nobody can run | ⭐ **an image that boots**, `ghcr.io/pkgforge-dev/netbsd:latest`, anonymously pullable |
-| **Checks** | 12-check gate, 48 tests | same gate, 49 tests, plus ⭐ **a CI workflow that runs a BSD and asserts on it** |
+| **Checks** | 12-check gate, 48 tests | same gate, 50 tests, plus ⭐ **a CI workflow that runs a BSD and asserts on it** |
 | **Cost** | | no money. About 1.3 GB downloaded |
-| **Health** | 19 entries, 1 done | 20 entries, 2 done, two new deep reviews |
+| **Health** | 19 entries, 1 done | 21 entries, 2 done, two new deep reviews |
 
 ---
 
@@ -61,11 +61,13 @@ fact, one home.
 
 ## ⭐ The five findings that change what the next session does
 
-1. ⛔ **The accelerator is not the same lever in both places it was measured.**
-   On the laptop, handing in `/dev/kvm` roughly halves the time to a shell. On
-   the runner the first measurement said the opposite. ⚠ **That first
-   measurement did not record which accelerator ran**, so it is withdrawn
-   rather than published, and the harness now reports it.
+1. ⛔ **A free runner cannot use `/dev/kvm` at all, and handing it in looks
+   like it can.** The node reaches the container owned by a group the container
+   is not in, the image falls back to emulation, and the run is half a second
+   slower for a device nothing used. ⚠ **The first reading of that was
+   "acceleration is slower on CI"**, which is a claim about acceleration and
+   never was one: both sides were emulated. The harness now says which
+   accelerator ran. On the laptop, where it can be opened, it halves the time.
 2. ⛔ **The guest's emulated network is slow enough to dominate anything that
    uses it.** Fetching one compiler through it took longer than every other
    step in the image build put together and did not finish inside a runner's
@@ -114,9 +116,11 @@ fact, one home.
 
 - ⛔ **Throughput inside the guest.** ⚠ **Half of it is measured**: the Linux
   side of the compile comparison is 27 seconds for `cc -O2 -c sqlite3.c`. The
-  guest side needs the image whose build was still running when this session
-  ended, and a ratio with one side is not a ratio.
-- ⛔ **Whether acceleration helps or hurts on a runner.** Withdrawn, see finding 1.
+  guest side needs a compiler installed in the image, which is `INF-09`, and a
+  ratio with one side is not a ratio.
+- ⛔ **Whether acceleration would help on a runner**, because it was never on
+  there. What is measured is that it cannot be turned on by handing in the
+  device alone.
 - ⚠ **Any host other than one Windows laptop and one GitHub runner.**
 - ⛔ **arm64 or macOS.** Not attempted. All artefacts are amd64.
 - ⚠ **Whether a consumer can get anything out of the guest.** They cannot yet.
