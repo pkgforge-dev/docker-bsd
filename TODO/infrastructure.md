@@ -363,39 +363,51 @@ The step boots the guest and runs `pkg_add` on a package that is already inside
 its filesystem. No network is involved. It is half a gigabyte of files, and
 under emulation that is tens of minutes.
 
-### ⛔ What it is NOT, because both were checked
+### ⛔ THE CAUSE IS NOT KNOWN, AND THREE GUESSES ARE ALREADY DEAD
 
-⚠ **Two obvious explanations were tested and are wrong.**
+⚠ **This entry was first written with a confident explanation and the
+explanation was wrong.** It is corrected here rather than quietly, because the
+wrong version is the useful part: each guess was cheap to test and each one
+would have sent the fix in a different direction.
 
-| the guess | the measurement |
+| the guess | the measurement that killed it |
 | --- | --- |
-| the guest is fetching it over the emulated network | ⛔ **no.** The package is written into the filesystem from Linux before the guest boots, and the provisioning stage has no network at all |
-| the emulated disk is slow | ⛔ **no.** The guest writes 100 MB in 2.5 seconds, which is 42 MB per second. Half a gigabyte of bulk writing would be about twelve seconds |
+| it is fetching over the emulated network | ⛔ **no.** The package is written into the guest's filesystem from Linux before it boots, and the stage has no network at all |
+| the emulated disk is slow | ⛔ **no.** The guest writes 100 MB in 2.5 seconds, 42 MB per second. Half a gigabyte of bulk writing is about twelve seconds |
+| ⚠ it is tens of thousands of small files | ⛔ **no, and this was the confident one.** The package holds **1,664** files. `xz -dc gcc14.tgz \| tar t \| wc -l` |
 
-⭐ **So it is the unpacking itself**: tens of thousands of small files, each one
-a handful of syscalls and a metadata update, which is the shape emulation is
-worst at. The bytes are not the cost; the file count is.
+⭐ **One thing was learned while killing the third guess**: the package is **xz**
+compressed, not gzip, whatever its `.tgz` name says. LZMA decoding is expensive
+per byte and emulation is expensive per instruction. ⛔ **That is a hypothesis
+and it is not measured**, and this entry does not get another confident
+explanation until somebody times the decompression on its own.
 
 ### Approach
 
-⭐ **Do not boot the guest to install a package.** The guest's root filesystem
-is ext2, and Linux can write into it directly. That is already how the package
-and the benchmark source get in, using `debugfs`. Extracting the package on the
-Linux side and writing its files in the same way removes the emulator from the
-step entirely.
+⛔ **Find the cause first.** Three cheap measurements, in order, each inside the
+guest:
 
-⚠ **What makes it an `M` and not an `S`**, and none of it is hypothetical:
+1. `xz -dc` the package to `/dev/null` and time it. That isolates the decode
+   from everything else;
+2. `tar t` the decoded stream to `/dev/null` and time it;
+3. the same two on the Linux side, for a ratio.
 
-1. a pkgsrc package is a tar with metadata, and `pkg_add` also registers it in
-   the package database. Files alone give a working compiler and a package
-   database that does not know about it;
-2. `debugfs` writes a file at a time and knows nothing about symlinks, modes or
-   ownership by default. Each of those is a separate command;
-3. ⛔ **the result has to be checked by booting the guest and running the
-   compiler**, or this trades a slow build for a fast wrong one.
+⭐ **Then the fix follows from the answer, and two are already obvious:**
+
+- if it is the decode, recompress the package on the Linux side into something
+  cheap to decode. The guest never has to know it was ever xz;
+- if it is the extraction, do not boot the guest at all. Its root filesystem is
+  ext2 and Linux already writes into it with `debugfs`, which is how the
+  package and the benchmark source get there.
+
+⚠ **What makes it an `M` rather than an `S`** if the second route is taken: a
+pkgsrc package is a tar plus metadata, and `pkg_add` also registers it in the
+package database. Files alone give a working compiler and a package database
+that does not know about it.
 
 ### Prove
 
-The build variant's image builds in a time comparable to the rescue variant's,
-⛔ **and the same compile the benchmark runs still succeeds inside it**, with
-`pkg_info` still listing what is installed.
+⛔ **A number for the cause**, in [`../docs/LIMITS.md`](../docs/LIMITS.md),
+before any fix is written. Then the build variant's image builds in a time
+comparable to the rescue variant's, the compile the benchmark runs still
+succeeds inside it, and `pkg_info` still lists what is installed.

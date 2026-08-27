@@ -71,6 +71,8 @@ fact, one home.
    step in the image build put together and did not finish inside a runner's
    hour. The same file over the container's own network takes seconds. ⚠ **Any
    benchmark that resolves dependencies is measuring the network.**
+   ⛔ **And moving the fetch out did not make the step fast**, which is `INF-09`
+   and is still unexplained: three guesses were tested and all three are dead.
 3. ⭐ **The guest's root filesystem is ext2, not FFS**, which is why it can be
    grown and written into from Linux with no BSD anywhere. That is what made a
    compiler in the image possible at all: the published userland has 201 MB
@@ -100,6 +102,11 @@ fact, one home.
 - ⛔ **Two conditions written as `A && B || C`**, which passed the linter on
   this machine and were refused by the one on CI. The repository already knows
   that shape is not if-then-else.
+- ⛔ **A confident explanation that was wrong, in an entry filed the same
+  hour.** `INF-09` first said the slow step was tens of thousands of small
+  files. The package holds 1,664. ⚠ **It was corrected in place with the wrong
+  version kept**, because each dead guess would have sent the fix somewhere
+  different.
 
 ---
 
