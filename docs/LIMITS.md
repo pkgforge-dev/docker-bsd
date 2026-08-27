@@ -21,7 +21,7 @@ Linux running on hardware somebody owns.
 | --- | --- | --- | --- |
 | ⭐ **only podman or docker** | a **NetBSD** shell | ⭐ **2.6 s** | ⭐ **none** |
 | ⭐ the same, plus `--device /dev/kvm` | the same shell | ⭐ **0.6 s** | one device |
-| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **3.6 s** | ⭐ **none** |
+| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **4.2 s** | ⭐ **none** |
 | an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | ⚠ **114 to 118 s** | ⭐ none |
 | a Linux host or WSL2 machine with `/dev/kvm` | a **FreeBSD 15.1** userland | 1.8 s | write access to `/dev/kvm` |
 | a BSD host already | ⭐ `podman run` on the images this repository publishes | seconds | none |
@@ -114,47 +114,64 @@ the same shell, which is what proves it.
 
 | variant | userland | image | to an answer, no device |
 | --- | --- | --- | --- |
-| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **3552 ms** (3543 to 3747) |
-| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add`, `pkgin` and a compiler | 671 MB before it was grown and provisioned | **11518 ms** (10917 to 11525) |
+| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **4157 ms** (3757 to 4162) |
+| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add` and `pkgin` | **2291 MB**, grown to hold a toolchain | **12959 ms** (12543 to 13378) |
 
-⚠ **The runner and the laptop are within 100 ms of each other on this**, which
-is worth noticing and not worth explaining: the laptop's own figure with the
-published image is 3629 ms, over the same command. ⛔ **Neither is comparable to
+⚠ **The runner and the laptop are within about half a second of each other on
+this**, which is worth noticing and not worth explaining: the laptop's own
+figure with the published image is 3629 ms, over the same command. ⛔ **Neither is comparable to
 the 2.6 s in section 1**, which timed the guest reaching a prompt inside an
 already-running container rather than a whole `podman run`. Subtracting one from
 the other would be inventing a number.
 
-⛔ **The build variant costs four times as long to reach a shell**, and that is
-the price of a userland that can do something rather than answer.
+⛔ **The build variant costs three times as long to reach a shell and is
+fifteen times the size**, and that is the price of a userland that can do
+something rather than answer. ⚠ **It does not yet contain a compiler**: see
+`INF-09`, which is about a provisioning step that does not finish.
 
 ### ⛔ `--device /dev/kvm` does NOT accelerate anything on a free runner
 
 ⭐ **This is the most useful thing measured on the runner, and it was nearly
 published backwards.**
 
-The first measurement said the device made the boot **slower**: 3442 ms against
-2981 ms, consistently. That reads as a claim about acceleration and it is not
-one. ⛔ **Measured again with a harness that reports which accelerator actually
-ran:**
+The first measurement said the device made the boot **slower**, consistently.
+That reads as a claim about acceleration and it is not one. ⛔ **Measured again
+with a harness that reports which accelerator actually ran, and with the
+container's own view of the device read rather than assumed:**
 
 | what was passed | what the guest used | median |
 | --- | --- | --- |
-| nothing | `tcg` | **3552 ms** |
-| ⛔ `--device /dev/kvm` | ⛔ **`tcg`, still** | 4058 ms |
+| nothing | `tcg` | **4157 ms** |
+| ⛔ `--device /dev/kvm` | ⛔ **`tcg`, after trying and failing** | 4655 ms |
+| ⛔ the same, plus `--group-add keep-groups` | ⛔ **`tcg`, still** | 4602 ms |
 
-⛔ **The device reached the container and could not be opened.** `/dev/kvm` is
-`crw-rw---- root kvm`, the engine on that runner is rootless, and the container
-is not in that group. The image falls back to emulation, correctly and
-silently, and the flag's only measurable effect was the cost of attaching a
-device nothing then used.
+⛔ **The device reaches the container and the emulator cannot open it.** Read
+from inside the container, with the device handed in:
+
+```text
+crw-rw----  1 nobody  nobody  10, 232  /dev/kvm
+uid=0(root) gid=0(root) groups=0(root),...
+```
+
+⚠ **The engine is rootless**, so the host's `root:kvm` ownership arrives as
+`nobody:nobody`, the mode grants nothing to other, and the process is root only
+inside a user namespace. ⛔ **It is neither the owner nor in the group.**
+
+⭐ **And the obvious test for that does not work.** `test -r /dev/kvm` and
+`test -w /dev/kvm` both answer **yes** in that container, because for uid 0 they
+are not a real permission check. The emulator's own `open` is, and it fails.
+⛔ **This page said the image never tried. It tried, failed in under a second,
+and fell back**, which is the behaviour it was built to have and was not the
+behaviour described here.
 
 ⚠ **So the honest statement is not "acceleration is slower on CI".** It is
-**"acceleration was never on"**, and the ~500 ms difference is the price of
-asking for a device.
+**"acceleration could not be turned on"**, and the ~500 ms is the price of
+asking for a device and having the attempt fail.
 
 ⭐ **What a consumer should take from this:** on a rootless engine, handing in
-`/dev/kvm` is not enough. The container has to be able to open it, and that
-needs the group as well as the node.
+`/dev/kvm` is not enough, and a shell test that says the node is readable is not
+evidence that it is usable. ⚠ **What would make it work on a runner is not
+measured here.** `--group-add keep-groups` was tried and changed nothing.
 
 ⭐ **Note what none of this touches.** Boot time is not throughput. A guest that
 executes very few instructions before reaching a prompt is the case where an

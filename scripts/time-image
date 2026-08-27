@@ -130,9 +130,17 @@ printf '  command  %s\n' "$COMMAND"
 #
 # ⚠ It is a separate, untimed run. It costs one extra boot and it is the
 # difference between a number and a claim.
-ACCEL=$( { probe_one >/dev/null; } 2>&1 | sed -n 's/.*accel=\([a-z]*\).*/\1/p' | tail -1 )
+PROBE=$( { probe_one >/dev/null; } 2>&1 )
+ACCEL=$( printf '%s\n' "$PROBE" | sed -n 's/.*accel=\([a-z]*\).*/\1/p' | tail -1 )
 [ -n "$ACCEL" ] || ACCEL=unreported
 printf '  accel    %s\n' "$ACCEL"
+
+# ⛔ AND WHY, WHEN THE IMAGE SAID WHY. A first version piped the probe straight
+# into sed, which kept the one line it was looking for and threw away the
+# sentence explaining it. That is how "the device did not help" was published
+# with a mechanism nobody had read. The image's own note about a device it
+# could not use goes to stderr, and it belongs in the report.
+printf '%s\n' "$PROBE" | grep -i 'could not use it\|handed in' | sed 's/^/  note     /'
 printf '\n'
 
 # ⚠ The samples go to a file rather than into a shell variable. A variable

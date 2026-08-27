@@ -89,15 +89,16 @@ to run and the build variant gave them something to compile with.
 ⚠ **Two facts from this session change how they must be approached**, and both
 are in [`../docs/LIMITS.md`](../docs/LIMITS.md):
 
-- ⛔ **A free runner cannot use `/dev/kvm`, and handing it in looks like it
-  can.** The node reaches the container owned by a group the container is not
-  in, the image falls back to emulation correctly and silently, and the run is
-  half a second slower for a device nothing used. ⭐ **So every number a runner
-  produces is an emulated number** until somebody makes the group work.
-- ⛔ **The emulated guest is slow at small operations, not at bytes.** It writes
-  100 MB in 2.5 seconds and takes tens of minutes to unpack half a gigabyte of
-  files. ⚠ A benchmark whose workload is thousands of small files is measuring
-  syscalls, not the compiler.
+- ⛔ **A free runner cannot use `/dev/kvm`, and every obvious check says it
+  can.** The node arrives as `crw-rw---- nobody nobody` and the process is root
+  only inside a user namespace, so `test -r` and `test -w` answer yes over a
+  node the emulator cannot open. The image tries, fails in under a second and
+  falls back. ⭐ **So every number a runner produces is an emulated number**,
+  and ⚠ **what would make it work there is not known**: `--group-add
+  keep-groups` was tried and changed nothing.
+- ⛔ **The guest writes 100 MB in 2.5 seconds and cannot unpack a 490 MB
+  package at all.** ⭐ The reason is not throughput: `/tmp` is a 32 MB tmpfs and
+  that is where the package manager stages. `INF-09`.
 - ⛔ **The emulated network is slower still.** Fetching one package through it
   took longer than every other step in the build put together, and `pkgin` did
   not finish at all in fifteen minutes. ⭐ Nothing in a benchmark should touch

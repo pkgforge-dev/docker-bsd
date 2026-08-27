@@ -61,13 +61,14 @@ fact, one home.
 
 ## ⭐ The five findings that change what the next session does
 
-1. ⛔ **A free runner cannot use `/dev/kvm` at all, and handing it in looks
-   like it can.** The node reaches the container owned by a group the container
-   is not in, the image falls back to emulation, and the run is half a second
-   slower for a device nothing used. ⚠ **The first reading of that was
-   "acceleration is slower on CI"**, which is a claim about acceleration and
-   never was one: both sides were emulated. The harness now says which
-   accelerator ran. On the laptop, where it can be opened, it halves the time.
+1. ⛔ **A free runner cannot use `/dev/kvm`, and every obvious way of checking
+   says it can.** The node arrives as `crw-rw---- nobody nobody`, the process is
+   root only inside a user namespace, and ⛔ **`test -r` and `test -w` both
+   answer yes anyway**, because for uid 0 they are not a permission check. The
+   emulator's `open` is, and it fails. ⚠ **This was published twice with the
+   wrong mechanism before the container's own view was read**: first as
+   "acceleration is slower on CI", then as "the image never tried". It tries,
+   fails in under a second, and falls back. On the laptop it halves the time.
 2. ⛔ **The guest's emulated network is slow enough to dominate anything that
    uses it.** Fetching one compiler through it took longer than every other
    step in the image build put together and did not finish inside a runner's
@@ -109,6 +110,11 @@ fact, one home.
   files. The package holds 1,664. ⚠ **It was corrected in place with the wrong
   version kept**, because each dead guess would have sent the fix somewhere
   different.
+- ⛔ **A second explanation, for a different thing, wrong twice.** What
+  `/dev/kvm` does on a runner was published as a speed result, then as a
+  permission result, and is neither until the container's own view of the device
+  is read. ⭐ **The pattern is the same both times**: a tidy mechanism invented
+  to fit a number, instead of a reading taken.
 
 ---
 

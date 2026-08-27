@@ -21,24 +21,26 @@ set -eu
 ACCEL="${BSD_ACCEL:-auto}"
 
 if [ "$ACCEL" = "auto" ]; then
-  # ⛔ THREE TESTS, NOT ONE. A /dev/kvm that exists and cannot be opened is the
-  # common case: podman without --device leaves no node at all, and a node
-  # present but owned by a group the container is not in reads as -c and not as
-  # -w. Each of the three is a different way for the same flag to be missing.
-  if [ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+  # ⛔ THIS DECIDES WHETHER THE DEVICE IS THERE. IT DOES NOT DECIDE WHETHER IT
+  # CAN BE USED, and a previous version of this file claimed it did.
+  #
+  # ⚠ MEASURED ON A FREE GITHUB RUNNER, 2026-08-28. With `--device /dev/kvm`
+  # under a rootless engine the node arrives as:
+  #
+  #     crw-rw----  1 nobody  nobody  10, 232  /dev/kvm
+  #
+  # The process is root inside a user namespace, so it is neither the owner nor
+  # in the group. ⛔ **And `test -r` and `test -w` both answer YES anyway**,
+  # because for uid 0 they are not a real permission check. The emulator's own
+  # `open` is, and it fails.
+  #
+  # ⭐ So the honest division of labour is: this decides that there is a device
+  # worth trying, and guest.py finds out whether it works by trying it and
+  # falls back. Anything cleverer here would be this same wrong test, longer.
+  if [ -c /dev/kvm ]; then
     ACCEL=kvm
   else
     ACCEL=tcg
-    # ⛔ SAY SO WHEN A DEVICE WAS HANDED IN AND CANNOT BE USED. Falling back
-    # silently is correct and it is not kind: on a free GitHub runner
-    # `--device /dev/kvm` gets the node into the container owned by a group the
-    # container is not in, everything works, and it is five hundred
-    # milliseconds slower for nothing. Measured 2026-08-28, after that silence
-    # cost this project a wrong conclusion about acceleration.
-    if [ -c /dev/kvm ]; then
-      printf 'netbsd: /dev/kvm is here and cannot be opened by this container, so it is not being used.\n' >&2
-      printf 'netbsd: a rootless engine usually needs the group as well as the node, for example --group-add keep-groups.\n' >&2
-    fi
   fi
 fi
 

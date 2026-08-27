@@ -204,8 +204,17 @@ def boot(accel):
         # ⛔ A /dev/kvm that is present and unusable dies in under a second. A
         # guest that is merely slow does not, so the elapsed time is what tells
         # the two apart. Falling back on every failure would hide a real one.
+        #
+        # ⭐ THIS IS THE ONLY PLACE THAT KNOWS THE DEVICE DID NOT WORK, so it is
+        # the only place the consumer can be told. The entrypoint cannot: its
+        # test says a device is present, and on a rootless engine `test -r` and
+        # `test -w` answer yes to root in a user namespace over a node it
+        # cannot actually open. Measured on a free GitHub runner, 2026-08-28.
         if accel != "tcg" and early < 5:
-            note("acceleration failed after %.1fs, retrying without it" % early)
+            note("/dev/kvm was handed in and the emulator could not use it, "
+                 "so this is running unaccelerated.")
+            note("a rootless engine usually needs the node to be openable by "
+                 "the container, not merely present.")
             accel = "tcg"
             continue
         note("no shell after %.1fs. console tail follows" % early)
