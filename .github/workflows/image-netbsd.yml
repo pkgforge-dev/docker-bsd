@@ -71,7 +71,13 @@ jobs:
   netbsd:
     name: ${{ matrix.variant }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # ⚠ GENEROUS ON PURPOSE, AND MEASURED RATHER THAN GUESSED. The build
+    # variant installs a compiler by booting the guest and unpacking half a
+    # gigabyte inside it, unaccelerated, because a build has no usable
+    # /dev/kvm. ⛔ It is not disk bound: the guest writes 100 MB in 2.5
+    # seconds. It is the unpacking itself, which is tens of thousands of small
+    # files and is exactly the shape emulation is worst at.
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: write

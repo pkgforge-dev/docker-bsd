@@ -345,3 +345,57 @@ sh experiments/35-boot-in-container.sh
 
 ⛔ Exit 0, and the whole run finishes in a time that is not a multiple of the
 per-command timeout.
+
+---
+
+## INF-09. Provisioning the guest costs more than everything else in the build
+
+**Source** Measured 2026-08-28 while building the image `IMG-02` needs.
+**Category** infrastructure · **Priority** P2 · **Effort** M · **Status** open
+
+### Problem
+
+⛔ **Installing one compiler into the guest takes longer than every other step
+in the image build put together**, and it is the reason that job's timeout is
+two hours rather than twenty minutes.
+
+The step boots the guest and runs `pkg_add` on a package that is already inside
+its filesystem. No network is involved. It is half a gigabyte of files, and
+under emulation that is tens of minutes.
+
+### ⛔ What it is NOT, because both were checked
+
+⚠ **Two obvious explanations were tested and are wrong.**
+
+| the guess | the measurement |
+| --- | --- |
+| the guest is fetching it over the emulated network | ⛔ **no.** The package is written into the filesystem from Linux before the guest boots, and the provisioning stage has no network at all |
+| the emulated disk is slow | ⛔ **no.** The guest writes 100 MB in 2.5 seconds, which is 42 MB per second. Half a gigabyte of bulk writing would be about twelve seconds |
+
+⭐ **So it is the unpacking itself**: tens of thousands of small files, each one
+a handful of syscalls and a metadata update, which is the shape emulation is
+worst at. The bytes are not the cost; the file count is.
+
+### Approach
+
+⭐ **Do not boot the guest to install a package.** The guest's root filesystem
+is ext2, and Linux can write into it directly. That is already how the package
+and the benchmark source get in, using `debugfs`. Extracting the package on the
+Linux side and writing its files in the same way removes the emulator from the
+step entirely.
+
+⚠ **What makes it an `M` and not an `S`**, and none of it is hypothetical:
+
+1. a pkgsrc package is a tar with metadata, and `pkg_add` also registers it in
+   the package database. Files alone give a working compiler and a package
+   database that does not know about it;
+2. `debugfs` writes a file at a time and knows nothing about symlinks, modes or
+   ownership by default. Each of those is a separate command;
+3. ⛔ **the result has to be checked by booting the guest and running the
+   compiler**, or this trades a slow build for a fast wrong one.
+
+### Prove
+
+The build variant's image builds in a time comparable to the rescue variant's,
+⛔ **and the same compile the benchmark runs still succeeds inside it**, with
+`pkg_info` still listing what is installed.

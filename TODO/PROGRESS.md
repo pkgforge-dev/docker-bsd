@@ -18,7 +18,7 @@ entries themselves. Do not add a "previous sessions" section.
 ```text
 session started 2026-08-27T17:00:00Z
 baseline        this repository published its first image that boots
-entries         total 20  open 18  blocked 0  done 2
+entries         total 21  open 19  blocked 0  done 2
 ```
 
 ⚠ The counts above are checked against [`INDEX.md`](INDEX.md)'s rows by
@@ -88,16 +88,19 @@ to run and the build variant gave them something to compile with.
 ⚠ **Two facts from this session change how they must be approached**, and both
 are in [`../docs/LIMITS.md`](../docs/LIMITS.md):
 
-- ⛔ **Boot time is not throughput, and the accelerator behaved differently in
-  the two places it was measured.** On the laptop the device roughly halves the
-  time to a shell. On the runner the first measurement said the opposite, and
-  that measurement did not record which accelerator ran. A benchmark that
-  cannot say which one it used is not a benchmark.
-- ⛔ **The guest's emulated network is slow enough to dominate any task that
-  uses it.** Installing one compiler through it took longer than everything
-  else in the build put together, and `pkgin` did not finish at all in fifteen
-  minutes. ⚠ A benchmark that fetches its dependencies is measuring the
-  network.
+- ⛔ **A free runner cannot use `/dev/kvm`, and handing it in looks like it
+  can.** The node reaches the container owned by a group the container is not
+  in, the image falls back to emulation correctly and silently, and the run is
+  half a second slower for a device nothing used. ⭐ **So every number a runner
+  produces is an emulated number** until somebody makes the group work.
+- ⛔ **The emulated guest is slow at small operations, not at bytes.** It writes
+  100 MB in 2.5 seconds and takes tens of minutes to unpack half a gigabyte of
+  files. ⚠ A benchmark whose workload is thousands of small files is measuring
+  syscalls, not the compiler.
+- ⛔ **The emulated network is slower still.** Fetching one package through it
+  took longer than every other step in the build put together, and `pkgin` did
+  not finish at all in fifteen minutes. ⭐ Nothing in a benchmark should touch
+  it.
 
 ### 2. ⛔ `IMG-02`, which is close and is not closed
 
@@ -132,10 +135,14 @@ rules and its twin has to move with it.
 
 ### 6. The `OPT-*` entries, which are levers and not goals
 
-⛔ **Do not pull one before `PERF-02` says which is stuck.** ⚠ Two now have
-evidence behind them: the image is 155 MB to provide a shell, and the
-provisioning step downloads a package through an emulated network stack when
-the container around it could have downloaded it at Linux speed.
+⛔ **Do not pull one before `PERF-02` says which is stuck.** ⚠ `OPT-02` now has
+evidence behind it: the image is 155 MB to provide a shell, and most of that is
+an emulator built to run anything.
+
+⭐ **`INF-09` is the one to do first and it is not an `OPT`.** Installing a
+compiler by booting the guest costs more than everything else in the build put
+together, and the guest does not have to be involved at all: its filesystem is
+ext2 and Linux can write into it.
 
 ### 7. ⚠ `BSD-01`, which was the headline and is not any more
 
