@@ -1,0 +1,126 @@
+#!/bin/sh
+# sources - where each BSD's userland comes from, and how it has to be handled.
+#
+# The defect this exists to catch is a matrix written once in a workflow, once
+# in a test and once in a README, which drift the first time a release moves.
+# Everything reads this file, so bumping a release is one edit.
+#
+# ⛔ EVERY FACT BELOW WAS MEASURED ON 2026-08-27, NOT READ FROM DOCUMENTATION.
+# The four BSDs need three different acquisition methods and that is the whole
+# reason this file is not a flat list:
+#
+#   freebsd    OCI       upstream publishes real OCI layout archives. Verified
+#                        by SHA-256 against the published CHECKSUM.SHA256, then
+#                        loaded. ⭐ Nothing is rebuilt: rebuilding an image
+#                        somebody already publishes correctly is the most
+#                        expensive mistake available.
+#   netbsd     SETS      base.tar.xz is already a rootfs tar owned root/wheel,
+#                        so it imports directly. Confirmed: the resulting image
+#                        reports os=netbsd arch=amd64, 269 MB.
+#   openbsd    SETS      base79.tgz is the same shape, owned root/bin. 535 MB.
+#   dragonfly  ISO       ⛔ THE ODD ONE. Upstream publishes no set tarballs at
+#                        all, only .img and .iso. The .img root filesystem is
+#                        HAMMER2 and Linux cannot mount it, so the disk image is
+#                        a dead end on any CI runner. The ISO is ISO9660,
+#                        confirmed by reading the CD001 signature at offset
+#                        32769, so it is readable by bsdtar or 7z anywhere and
+#                        that is the route.
+#
+# ⚠ x86_64 ONLY, on purpose. This is a proof of concept and one architecture is
+# enough to prove it. FreeBSD publishes aarch64 and riscv64 as well; the others
+# vary. Adding an architecture means checking it exists first, per BSD.
+#
+# Usage:
+#   sh scripts/sources --list                every id
+#   sh scripts/sources --method ID           oci | sets | iso
+#   sh scripts/sources --version ID
+#   sh scripts/sources --urls ID             one URL per line
+#   sh scripts/sources --json                a GitHub Actions matrix
+#
+# Exit codes: 0 ok, 2 unknown id or argument.
+
+set -eu
+
+ARCH_OCI="amd64"
+
+FREEBSD_VERSION="15.1-RELEASE"
+NETBSD_VERSION="10.1"
+OPENBSD_VERSION="7.9"
+DRAGONFLY_VERSION="6.4.2"
+
+# ⚠ OpenBSD names its set after the version with the dot removed: 7.9 is
+# base79.tgz. Derived rather than hardcoded so a bump does not need two edits.
+OPENBSD_SETVER=$(printf '%s' "$OPENBSD_VERSION" | tr -d '.')
+
+FREEBSD_BASE="https://download.freebsd.org/releases/OCI-IMAGES/${FREEBSD_VERSION}/${ARCH_OCI}/Latest"
+NETBSD_BASE="https://cdn.netbsd.org/pub/NetBSD/NetBSD-${NETBSD_VERSION}/${ARCH_OCI}/binary/sets"
+OPENBSD_BASE="https://cdn.openbsd.org/pub/OpenBSD/${OPENBSD_VERSION}/${ARCH_OCI}"
+DRAGONFLY_BASE="https://mirror-master.dragonflybsd.org/iso-images"
+
+# ⚠ FreeBSD ships five variants. Ordered smallest first, so a matrix that is
+# going to fail fails on the 559 KB one rather than the 215 MB one.
+FREEBSD_VARIANTS="static dynamic runtime notoolchain toolchain"
+
+ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
+
+method() {
+  case "$1" in
+    freebsd)   printf 'oci\n' ;;
+    netbsd)    printf 'sets\n' ;;
+    openbsd)   printf 'sets\n' ;;
+    dragonfly) printf 'iso\n' ;;
+    *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+version() {
+  case "$1" in
+    freebsd)   printf '%s\n' "$FREEBSD_VERSION" ;;
+    netbsd)    printf '%s\n' "$NETBSD_VERSION" ;;
+    openbsd)   printf '%s\n' "$OPENBSD_VERSION" ;;
+    dragonfly) printf '%s\n' "$DRAGONFLY_VERSION" ;;
+    *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+urls() {
+  case "$1" in
+    freebsd)
+      for v in $FREEBSD_VARIANTS; do
+        printf '%s/FreeBSD-%s-%s-container-image-%s.txz\n' \
+          "$FREEBSD_BASE" "$FREEBSD_VERSION" "$ARCH_OCI" "$v"
+      done ;;
+    netbsd)
+      printf '%s/base.tar.xz\n' "$NETBSD_BASE"
+      printf '%s/etc.tar.xz\n' "$NETBSD_BASE" ;;
+    openbsd)
+      printf '%s/base%s.tgz\n' "$OPENBSD_BASE" "$OPENBSD_SETVER" ;;
+    dragonfly)
+      printf '%s/dfly-x86_64-%s_REL.iso\n' "$DRAGONFLY_BASE" "$DRAGONFLY_VERSION" ;;
+    *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+json() {
+  printf '{"include":['
+  first=1
+  for id in $(ids); do
+    [ "$first" = "1" ] || printf ','
+    first=0
+    printf '{"bsd":"%s","method":"%s","version":"%s","arch":"%s"}' \
+      "$id" "$(method "$id")" "$(version "$id")" "$ARCH_OCI"
+  done
+  printf ']}\n'
+}
+
+case "${1:-}" in
+  --list)    ids ;;
+  --arch)    printf '%s\n' "$ARCH_OCI" ;;
+  --variants) printf '%s\n' "$FREEBSD_VARIANTS" ;;
+  --method)  shift; method "${1:-}" ;;
+  --version) shift; version "${1:-}" ;;
+  --urls)    shift; urls "${1:-}" ;;
+  --json)    json ;;
+  -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls or --json\n' >&2; exit 2 ;;
+esac

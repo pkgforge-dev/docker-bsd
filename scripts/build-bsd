@@ -1,0 +1,254 @@
+#!/bin/sh
+# build-bsd - turn one BSD's published userland into an OCI image, and
+# optionally push it.
+#
+# ⭐ WHAT THIS IS. Four BSDs, three acquisition methods, one output shape. The
+# methods are not interchangeable and scripts/sources says why each is what it
+# is. This script owns the part they share: verify, assemble a root filesystem
+# tar, import it with the right OCI os value, read back what the image actually
+# declares, tag, and push only when asked.
+#
+# ⛔ IT NEVER PUBLISHES BYTES IT DID NOT VERIFY, and for FreeBSD it never
+# rebuilds: upstream publishes real OCI archives and those are loaded as they
+# are. The others publish no OCI images at all, which is why they are built.
+#
+# ⚠ A BSD IMAGE CANNOT BE RUN ON A LINUX ENGINE AND THIS DOES NOT TRY.
+# Measured 2026-08-27: `podman run` on a freebsd/amd64 image under a Linux
+# podman machine exits 139, a SIGSEGV, because the Linux ELF loader accepts the
+# binary and it dies on its first syscall. That is not `Exec format error`, so
+# no binfmt_misc or qemu-user work reaches it. HISTORY/poc.md has the numbers.
+# ⭐ Building and publishing need no BSD kernel. Only running does.
+#
+# Usage:
+#   sh scripts/build-bsd --bsd netbsd [--registry ghcr.io/pkgforge-dev] [--push]
+#   sh scripts/build-bsd --bsd freebsd --variant static [--push]
+#
+# Without --push it builds and tags locally and prints what it would publish.
+# That is the default, because a publish is not a thing to do by accident.
+#
+# Exit codes: 0 done, 1 something failed, 2 could not run.
+#
+# ⛔ Read the exit code from this process, unpiped.
+
+set -eu
+
+HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+SOURCES="$HERE/sources"
+
+BSD=""
+VARIANT=""
+REGISTRY="ghcr.io/pkgforge-dev"
+PUSH=0
+WORK=""
+KEEP=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --bsd)      shift; BSD="${1:-}" ;;
+    --variant)  shift; VARIANT="${1:-}" ;;
+    --registry) shift; REGISTRY="${1:-}" ;;
+    --work)     shift; WORK="${1:-}" ;;
+    --push)     PUSH=1 ;;
+    --keep)     KEEP=1 ;;
+    -h|--help)  awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"; exit 0 ;;
+    *) printf 'build-bsd: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+[ -n "$BSD" ] || { printf 'build-bsd: --bsd is required (%s)\n' "$(sh "$SOURCES" --list | tr '\n' ' ')" >&2; exit 2; }
+command -v curl >/dev/null 2>&1 || { printf 'build-bsd: curl not found\n' >&2; exit 2; }
+
+if command -v podman >/dev/null 2>&1; then ENGINE=podman
+elif command -v docker >/dev/null 2>&1; then ENGINE=docker
+else printf 'build-bsd: no podman and no docker on PATH\n' >&2; exit 2
+fi
+
+METHOD=$(sh "$SOURCES" --method "$BSD")
+VERSION=$(sh "$SOURCES" --version "$BSD")
+ARCH=$(sh "$SOURCES" --arch)
+
+# ⛔ A REPOSITORY-RELATIVE SCRATCH DIRECTORY, NOT /tmp. `/tmp` is not one
+# directory: Git Bash resolves it inside the msys root and the native Windows
+# curl resolves it somewhere else or nowhere, which produces
+# `curl: (23) client returned ERROR on write` naming neither. Measured here.
+if [ -z "$WORK" ]; then
+  WORK="$HERE/../.work/$BSD.$$"
+  CLEAN=1
+else
+  CLEAN=0
+fi
+[ "$KEEP" = "1" ] && CLEAN=0
+mkdir -p "$WORK" || { printf 'build-bsd: cannot create %s\n' "$WORK" >&2; exit 2; }
+WORK=$(CDPATH='' cd -- "$WORK" && pwd)
+# shellcheck disable=SC2064
+# Expanded now on purpose: WORK must not be re-read at trap time.
+[ "$CLEAN" = "1" ] && trap "rm -rf '$WORK'" EXIT INT TERM
+
+# ── fetch one URL into WORK, by bare filename ───────────────────────────────
+# ⛔ curl is run FROM the directory and given a bare filename, never a path.
+# See the WORK comment above: a path is what breaks on Windows.
+fetch() {
+  _url="$1"
+  _name=$(basename "$_url")
+  printf 'build-bsd: fetching %s\n' "$_url" >&2
+  # ⛔ --fail, so an HTTP error page is never written and then treated as data.
+  ( cd "$WORK" && curl -fsSL --max-time 1800 "$_url" -o "$_name" ) || {
+    printf 'build-bsd: download failed: %s\n' "$_url" >&2
+    rm -f "$WORK/$_name"
+    return 1
+  }
+  printf '%s\n' "$WORK/$_name"
+}
+
+# ── FreeBSD: verify against the published digest, then load ─────────────────
+build_oci() {
+  [ -n "$VARIANT" ] || VARIANT="static"
+  _file="FreeBSD-${VERSION}-${ARCH}-container-image-${VARIANT}.txz"
+  _url=$(sh "$SOURCES" --urls freebsd | grep -F "$_file") || {
+    printf 'build-bsd: %s is not a known FreeBSD variant\n' "$VARIANT" >&2; exit 2; }
+
+  fetch "$_url" >/dev/null || exit 1
+  _sums=$(dirname "$_url")/CHECKSUM.SHA256
+  fetch "$_sums" >/dev/null || exit 1
+
+  # ⛔ THE DIGEST IS CHECKED AND THERE IS NO WAY PAST IT. A verification with a
+  # documented bypass is one somebody routes around at 2am.
+  if command -v sha256sum >/dev/null 2>&1; then _sum="sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then _sum="shasum -a 256"
+  else printf 'build-bsd: no sha256 tool; refusing to publish unverifiable bytes\n' >&2; exit 2
+  fi
+  _expect=$(grep -F "($_file)" "$WORK/CHECKSUM.SHA256" | sed 's/.*= *//' | tr -d '\r' | head -1)
+  [ -n "$_expect" ] || { printf 'build-bsd: %s is not listed in CHECKSUM.SHA256\n' "$_file" >&2; exit 1; }
+  _actual=$($_sum "$WORK/$_file" | cut -d' ' -f1)
+  if [ "$_expect" != "$_actual" ]; then
+    printf 'build-bsd: DIGEST MISMATCH for %s\n  expected %s\n  actual   %s\n' \
+      "$_file" "$_expect" "$_actual" >&2
+    rm -f "$WORK/$_file"
+    exit 1
+  fi
+  printf 'build-bsd: digest ok %s\n' "$_actual" >&2
+
+  # ⭐ An OCI layout archive, not a rootfs. It is loaded, never rebuilt.
+  # ⛔ RUN FROM THE DIRECTORY WITH A BARE FILENAME. podman on Windows is a
+  # native binary and cannot open a msys-style path under /c/Users; under
+  # MSYS_NO_PATHCONV=1, which driving a container runtime needs, Git Bash does
+  # not convert it either. The failure is "load produced no image", naming
+  # neither the path nor the cause. Measured here twice: once for curl, once
+  # for podman, same root cause.
+  LOADED=$( cd "$WORK" && "$ENGINE" load -i "$_file" 2>&1 | sed -n 's/^Loaded image: *//p' | head -1 )
+  [ -n "$LOADED" ] || { printf 'build-bsd: load produced no image\n' >&2; exit 1; }
+  TAG="${VERSION%-RELEASE}-${VARIANT}"
+}
+
+# ── NetBSD and OpenBSD: the sets are already root-owned rootfs tars ─────────
+build_sets() {
+  _first=""
+  for _u in $(sh "$SOURCES" --urls "$BSD"); do
+    _f=$(fetch "$_u") || exit 1
+    [ -n "$_first" ] || _first="$_f"
+  done
+
+  # ⚠ ONE SET IS IMPORTED AND THE REST ARE NOT, AND THAT IS A KNOWN LIMIT.
+  # `podman import` takes a single tar. Merging sets means extracting them into
+  # one tree, which needs a host that can honour BSD ownership and device
+  # nodes. NetBSD's base is a complete userland on its own, which is enough for
+  # a proof of concept; HISTORY/poc.md records this rather than implying the
+  # image is a full install.
+  LOADED="localhost/${BSD}-import:$$"
+  # ⛔ Bare filename, run from WORK. See the load comment above: a Git Bash path
+  # handed to a native Windows podman fails in a way that names neither.
+  _base=$(basename "$_first")
+  ( cd "$WORK" && "$ENGINE" import --os "$BSD" --arch "$ARCH" \
+      --change 'CMD ["/bin/sh"]' \
+      --change 'ENV PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/pkg/bin:/usr/pkg/sbin' \
+      "$_base" "$LOADED" ) >/dev/null 2>&1 || {
+      printf 'build-bsd: import failed for %s\n' "$_first" >&2; exit 1; }
+  TAG="${VERSION}-base"
+}
+
+# ── DragonFly: no sets exist, and the disk image is HAMMER2 ────────────────
+build_iso() {
+  # ⛔ THE .img IS NOT USABLE AND THAT IS NOT AN OVERSIGHT. DragonFly's root
+  # filesystem is HAMMER2 and Linux has no driver for it, so no CI runner can
+  # mount the disk image. The ISO is ISO9660, confirmed by reading the CD001
+  # signature at offset 32769, so bsdtar and 7z can read it on any host.
+  # ⭐ EITHER READER, because the two hosts this has to run on have different
+  # ones. CI runners get bsdtar from libarchive-tools; this developer's Windows
+  # machine has 7z and no bsdtar. Requiring one would make the script
+  # unrunnable on a machine that can perfectly well do the job.
+  _reader=""
+  if command -v bsdtar >/dev/null 2>&1; then _reader="bsdtar"
+  elif command -v 7z >/dev/null 2>&1; then _reader="7z"
+  elif command -v 7zz >/dev/null 2>&1; then _reader="7zz"
+  else
+    printf 'build-bsd: dragonfly needs bsdtar or 7z to read ISO9660\n' >&2
+    printf '  ubuntu:  apt-get install -y libarchive-tools\n' >&2
+    printf '  windows: scoop install 7zip\n' >&2
+    exit 2
+  fi
+  printf 'build-bsd: reading the ISO with %s\n' "$_reader" >&2
+
+  _u=$(sh "$SOURCES" --urls dragonfly)
+  _iso=$(fetch "$_u") || exit 1
+  _isoname=$(basename "$_iso")
+
+  _root="$WORK/root"
+  mkdir -p "$_root"
+  # ⛔ Bare filenames, run from WORK: the same native-binary path problem that
+  # bit curl and podman above applies to 7z, which is also a Windows binary.
+  if [ "$_reader" = "bsdtar" ]; then
+    ( cd "$WORK" && bsdtar -xf "$_isoname" -C root ) || {
+      printf 'build-bsd: could not extract the ISO with bsdtar\n' >&2; exit 1; }
+  else
+    ( cd "$WORK" && "$_reader" x -y -oroot "$_isoname" >/dev/null ) || {
+      printf 'build-bsd: could not extract the ISO with %s\n' "$_reader" >&2; exit 1; }
+  fi
+
+  # ⚠ Ownership is normalised to root. An ISO carries no useful uid, and a tar
+  # holding a build machine's uid is what rootless podman refuses with
+  # "potentially insufficient UIDs or GIDs available in user namespace".
+  # Measured here on the first attempt.
+  ( cd "$_root" && tar --owner=0 --group=0 --numeric-owner -cf "$WORK/rootfs.tar" . ) || {
+    printf 'build-bsd: could not repack the root filesystem\n' >&2; exit 1; }
+
+  LOADED="localhost/${BSD}-import:$$"
+  ( cd "$WORK" && "$ENGINE" import --os dragonfly --arch "$ARCH" \
+      --change 'CMD ["/bin/sh"]' \
+      "rootfs.tar" "$LOADED" ) >/dev/null 2>&1 || {
+      printf 'build-bsd: import failed\n' >&2; exit 1; }
+  TAG="${VERSION}-base"
+}
+
+case "$METHOD" in
+  oci)  build_oci ;;
+  sets) build_sets ;;
+  iso)  build_iso ;;
+  *) printf 'build-bsd: unknown method %s\n' "$METHOD" >&2; exit 2 ;;
+esac
+
+# ── read back what the image DECLARES, not what we asked for ───────────────
+# ⛔ An artifact fetched from the wrong place would otherwise be published under
+# a name asserting an os it does not have, which a consumer cannot detect until
+# it runs, on a host where running is the one thing that is hard to arrange.
+GOT_OS=$("$ENGINE" image inspect "$LOADED" --format '{{.Os}}' 2>/dev/null || true)
+GOT_ARCH=$("$ENGINE" image inspect "$LOADED" --format '{{.Architecture}}' 2>/dev/null || true)
+[ "$GOT_OS" = "$BSD" ] || {
+  printf 'build-bsd: image declares os=%s, expected %s\n' "$GOT_OS" "$BSD" >&2; exit 1; }
+[ "$GOT_ARCH" = "$ARCH" ] || {
+  printf 'build-bsd: image declares arch=%s, expected %s\n' "$GOT_ARCH" "$ARCH" >&2; exit 1; }
+printf 'build-bsd: verified %s/%s\n' "$GOT_OS" "$GOT_ARCH"
+
+TARGET="${REGISTRY}/${BSD}:${TAG}-${ARCH}"
+"$ENGINE" tag "$LOADED" "$TARGET"
+printf 'build-bsd: tagged %s\n' "$TARGET"
+
+if [ "$PUSH" = "1" ]; then
+  "$ENGINE" push "$TARGET" || { printf 'build-bsd: push failed\n' >&2; exit 1; }
+  printf 'build-bsd: pushed %s\n' "$TARGET"
+else
+  printf 'build-bsd: DRY RUN, not pushed. Pass --push to publish.\n'
+fi
+
+printf '%s\n' "$TARGET"
+exit 0

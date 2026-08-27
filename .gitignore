@@ -1,0 +1,34 @@
+# Scratch. build-bsd writes its downloads here, and they are release artefacts
+# that are re-fetchable from the URL scripts/sources records.
+.work/
+
+# This repository's OWN ephemeral scratch. A session working across two trees
+# has a .tmp/ in each; anything written here belongs to THIS one and never to
+# the parent's. ⛔ experiments/ is the opposite and is tracked on purpose: see
+# experiments/README.md for which of the two a file belongs in.
+.tmp/
+*.txz
+*.tgz
+*.tar.xz
+*.iso
+*.img
+
+# Windows reserved device names. A tool's own argument list can create one:
+# podman machine ssh passes -o UserKnownHostsFile=NUL and Git Bash treats it as
+# a filename.
+nul
+CON
+PRN
+AUX
+NUL
+COM[1-9]
+LPT[1-9]
+
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# Python bytecode. A .pyc carries the absolute path it was compiled at.
+__pycache__/
+*.py[cod]

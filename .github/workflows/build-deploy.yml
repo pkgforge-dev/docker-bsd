@@ -1,0 +1,125 @@
+# Build the BSD OCI images and publish them to ghcr.io.
+#
+# ⛔ ONE JOB PER BSD, AND THE TAGS ARE CREATED BY A MERGE JOB WITH needs: OVER
+# THE WHOLE MATRIX. A run that loses one BSD publishes nothing at all, rather
+# than publishing three of four and leaving a consumer to discover the gap.
+# The shape is taken from pkgforge-dev/docker-archlinux, which pushes by digest
+# and tags afterwards for the same reason.
+#
+# ⚠ THE FOUR BSDs NEED THREE DIFFERENT ACQUISITION METHODS. scripts/sources is
+# the one place that says which, and why. Do not restate it here.
+#
+# ⭐ A BSD IMAGE CANNOT BE RUN ON THESE RUNNERS AND THIS WORKFLOW DOES NOT TRY.
+# Measured 2026-08-27: a freebsd/amd64 image under a Linux engine exits 139, a
+# SIGSEGV. Building and publishing need no BSD kernel; only running does. Any
+# "smoke test" here that claimed to run the image would be theatre.
+#
+# ⛔ Third-party actions are pinned to a COMMIT, not a tag. A tag moves, and a
+# moved tag runs code nobody reviewed with the permissions granted here.
+#
+#   gh api repos/actions/checkout/git/ref/tags/v7 --jq .object.sha
+
+name: build-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and verify, but create no public tag
+        type: boolean
+        default: true
+  schedule:
+    # Weekly. These are release artefacts and they do not move daily, so a
+    # nightly run would be noise that nobody reads.
+    - cron: "0 4 * * 1"
+
+defaults:
+  run:
+    shell: bash
+
+# Least privilege. Only the publish job asks for more, and it asks for exactly
+# the one extra scope it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  # Resolve the matrix ONCE, from scripts/sources, so every job builds against
+  # the same declared set and the matrix cannot drift from the scripts.
+  resolve:
+    name: Resolve the matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: m
+        run: |
+          m=$(sh scripts/sources --json)
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "$m"
+
+  build:
+    name: ${{ matrix.bsd }} ${{ matrix.version }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # ⛔ NOT fail-fast. Every BSD's result is wanted, because "which ones
+      # broke" is the information a run exists to produce. The merge job is
+      # what refuses to publish a partial set.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ⚠ DragonFly is read out of an ISO because its disk image is HAMMER2 and
+      # Linux cannot mount it. bsdtar is what reads ISO9660 here.
+      - name: Install bsdtar for the ISO path
+        if: matrix.method == 'iso'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libarchive-tools
+
+      - name: Log in to ghcr.io
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # ⛔ THE EXIT CODE IS THE SCRIPT'S OWN, UNPIPED. Piping this into tee
+      # would report tee's status and a failed build would read as green.
+      - name: Build ${{ matrix.bsd }}
+        run: |
+          args=(--bsd "${{ matrix.bsd }}" --registry "$REGISTRY")
+          if [ "${{ inputs.dry_run }}" != "true" ]; then args+=(--push); fi
+          sh scripts/build-bsd "${args[@]}"
+
+  # ⛔ THE GATE ON A PARTIAL RUN. needs: build with no `if: always()`, so this
+  # is skipped the moment any BSD fails, and a skipped job publishes nothing.
+  verify:
+    name: All four published
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report what the run produced
+        run: |
+          echo "every BSD in scripts/sources built:"
+          sh scripts/sources --list
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "dry run: nothing was pushed"
+          fi

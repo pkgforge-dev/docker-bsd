@@ -1,0 +1,132 @@
+# The static gate. Everything that can be checked without building an image.
+#
+# ⛔ IT DOES NOT BUILD AND IT DOES NOT PUBLISH. Building fetches hundreds of
+# megabytes from four upstreams, which is a job that belongs on a schedule and
+# a dispatch, not on every push. build-deploy.yml owns that.
+#
+# ⛔ AND IT DOES NOT RUN A BSD IMAGE. No runner has a BSD kernel, so a test that
+# claimed to run one would be theatre. README.md carries the measurement.
+#
+# ⭐ THE TWO HOSTS ARE THE POINT. This repository keeps a .sh and a .ps1 half of
+# every check, and check-twins asserts they answer identically. That check needs
+# both a POSIX shell and a PowerShell, and between them the two jobs below have
+# every tool.
+#
+# ⛔ Third-party actions are pinned to a COMMIT, not a tag.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gate:
+    name: the gate (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # ⛔ check-no-secrets --all-history is not run here, but the changelog
+          # and record checks read the tree, not the history. A shallow clone is
+          # enough and a full one is not needed.
+
+      - name: shellcheck is present
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: PSScriptAnalyzer is present
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      # ⛔ The whole gate, not a selection of it. A list of checks in a workflow
+      # is a second copy of the list in check-gate.sh, and the one somebody
+      # forgets to extend is the check that was added last.
+      - name: the gate
+        run: sh scripts/common/check-gate.sh
+
+      - name: the test suite
+        run: sh tests/run.sh
+
+  gate-windows:
+    name: the gate (windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: PSScriptAnalyzer is present
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      # ⭐ The PowerShell half of the gate, on the host it is written for. A
+      # .ps1 that only ever runs under a Linux pwsh is a .ps1 nobody has tested.
+      - name: the gate, PowerShell half
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/common/check-gate.ps1
+
+  # ⭐ SEPARATE, AND ALLOWED TO FAIL WITHOUT FAILING THE GATE. Upstream mirrors
+  # go down, retire a release, and rename a directory, and none of that is a
+  # defect in this repository's code. It is still worth knowing on every run,
+  # so it reports loudly and does not block a merge.
+  upstream:
+    name: upstream still reachable
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: every URL scripts/sources declares resolves
+        run: |
+          fail=0
+          for bsd in $(sh scripts/sources --list); do
+            for u in $(sh scripts/sources --urls "$bsd"); do
+              code=$(curl -fsSI --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "$u" || echo 000)
+              if [ "$code" = "200" ]; then
+                echo "ok   $code $u"
+              else
+                echo "FAIL $code $u"; fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      # ⚠ The experiments consume published artefacts from four other projects.
+      # If one of those disappears, every number in docs/LIMITS.md becomes
+      # unreproducible, and this is where that is noticed.
+      - name: every artefact the experiments consume resolves
+        run: |
+          fail=0
+          for u in \
+            "https://smolbsd.org/assets/netbsd-SMOL" \
+            "https://github.com/NetBSDfr/smolBSD/releases/download/latest/rescue-amd64.img.xz" \
+            "https://download.freebsd.org/releases/CI-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CI-ufs.raw.xz" \
+            "https://github.com/acj/freebsd-firecracker/releases/download/v0.11.0/freebsd-kern.bin" \
+          ; do
+            code=$(curl -fsSIL --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "$u" || echo 000)
+            if [ "$code" = "200" ]; then echo "ok   $code $u"; else echo "FAIL $code $u"; fail=1; fi
+          done
+          exit $fail

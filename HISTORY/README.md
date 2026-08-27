@@ -1,0 +1,80 @@
+# HISTORY
+
+⭐ **What happened, in its original wording.** Every measurement this repository
+has taken, every premise a later measurement disproved, and every reference it
+mined.
+
+⛔ **Append, never edit.** A premise a measurement disproves **keeps its
+wording** and gets the correction written underneath it. That is not politeness
+about the past: a silently corrected document teaches nobody, and the reader who
+needs this directory is the one about to make the same mistake.
+
+⚠ **This is not the work order.** That is [`../TODO/PROGRESS.md`](../TODO/PROGRESS.md),
+and it is the only file that carries one.
+
+---
+
+## What is here
+
+| path | what it is |
+| --- | --- |
+| [`poc.md`](poc.md) | ⭐ the proof of concept. Every measurement behind the image-building half, with the commands that produced it |
+| [`misc/`](misc/) | session records and the orientation prompt |
+| [`references/`](references/) | ⭐ 28 external projects mined, with verdicts, a ranking, and the commands worth stealing |
+| [`reviews/`](reviews/) | ⭐ deep reviews, **numbered by the reader each one imagines**. Each says what it swept, what it found, and ⛔ what it did NOT look at |
+
+---
+
+## ⭐ The reviews
+
+⛔ **Each is named for the reader it imagines**, not for the area it covers. A
+review named after an area finds what that area's author was already thinking
+about; a review named after a person finds what that person would trip over.
+
+| review | the lens |
+| --- | --- |
+| [`reviews/1-somebody-checking-whether-the-numbers-are-real.md`](reviews/1-somebody-checking-whether-the-numbers-are-real.md) | a reader who does not trust this repository and is hunting the sentence with no artefact behind it |
+| [`reviews/2-somebody-who-cloned-this-and-has-nothing-else.md`](reviews/2-somebody-who-cloned-this-and-has-nothing-else.md) | ⭐ a person or agent with this repository and **nothing else** |
+
+⛔ **Every review ends with what it did not look at.** A pass that reports
+nothing means the pass was too shallow, and three passes reporting nothing is a
+weaker result than one pass reporting a real defect.
+
+---
+
+## ⭐ How to read `references/`
+
+Two halves, and they are not interchangeable.
+
+- [`references/findings.md`](references/findings.md) carries the **verdicts and
+  the argument**: what each project is worth, ranked, and why. Read it when
+  deciding what to try.
+- [`references/usable.md`](references/usable.md) carries the **commands and the
+  outputs**. Read it when doing the thing.
+
+⭐ **The single most repeated lesson in both is: read the tracker, not the
+README.** The cost of a project is in its issues. Two sweeps in a row found
+that the decisive fact, the one that changed a plan, was in an issue comment and
+in no README anywhere.
+
+---
+
+## ⛔ Three corrections this repository has published about itself
+
+⚠ Listed here because a reader who trusts a document without checking this page
+will trust three sentences that are wrong.
+
+1. **"There is no counterpart presenting BSD syscalls on a Linux kernel."**
+   One was built and abandoned in 2022. ⭐ The conclusion holds and the
+   reasoning changed. [`references/usable.md`](references/usable.md).
+2. **"Under the Windows hypervisor, these CPU models wedge the emulator."**
+   ⛔ Did not reproduce here on current software. The sources measured older
+   software on other hardware and are not falsified; the prediction about this
+   machine was. [`references/usable.md`](references/usable.md).
+3. **"The guest's clock is why Go binaries die."** ⛔ Withdrawn inside the same
+   session that published it. The clock measurably works and the fault is
+   elsewhere. [`../TODO/bsd.md`](../TODO/bsd.md).
+
+⭐ **All three were caught by a review or a later measurement, not by anything
+running.** That is the argument for [`../docs/methodology/reviews.md`](../docs/methodology/reviews.md)
+in one sentence.
