@@ -35,12 +35,14 @@ WORKDIR /art
 # sha256sum -c is the last command in each pipeline, so the exit code the shell
 # reads is its own. An upstream that rotates a release under a moving tag fails
 # this build loudly, which is the intended behaviour and not a defect.
-RUN curl -fsSL -o netbsd-SMOL "$KERNEL_URL" \
- && echo "$KERNEL_SHA256  netbsd-SMOL" | sha256sum -c -
+RUN curl -fsSL -o kernel "$KERNEL_URL" \
+ && echo "$KERNEL_SHA256  kernel" | sha256sum -c -
 
-RUN curl -fsSL -o rescue-amd64.img.xz "$ROOTFS_URL" \
- && echo "$ROOTFS_SHA256  rescue-amd64.img.xz" | sha256sum -c - \
- && xz -d rescue-amd64.img.xz
+# ⚠ The names are generic because the variants are not. One definition builds
+# both, and a filename carrying `rescue` would be wrong in half of them.
+RUN curl -fsSL -o rootfs.img.xz "$ROOTFS_URL" \
+ && echo "$ROOTFS_SHA256  rootfs.img.xz" | sha256sum -c - \
+ && xz -d rootfs.img.xz
 
 # ── what ships ──────────────────────────────────────────────────────────────
 FROM ${BASE}
@@ -49,6 +51,8 @@ ARG KERNEL_URL
 ARG KERNEL_SHA256
 ARG ROOTFS_URL
 ARG ROOTFS_SHA256
+ARG ROOT_LABEL
+ARG VARIANT
 ARG SOURCE_COMMIT=unknown
 
 LABEL org.opencontainers.image.title="netbsd" \
@@ -59,8 +63,13 @@ LABEL org.opencontainers.image.title="netbsd" \
 
 RUN apk add --no-cache qemu-system-x86_64 python3
 
-COPY --from=fetch /art/netbsd-SMOL /guest/netbsd-SMOL
-COPY --from=fetch /art/rescue-amd64.img /guest/rescue-amd64.img
+COPY --from=fetch /art/kernel /guest/kernel
+COPY --from=fetch /art/rootfs.img /guest/rootfs.img
+
+# ⛔ THE ROOT LABEL IS BAKED, NOT GUESSED. It is the GPT partition name the
+# guest kernel is told to mount, it differs per variant, and a wrong one boots
+# a kernel that never finds its disk.
+ENV BSD_ROOT_LABEL="${ROOT_LABEL}"
 
 # ⛔ console.py IS COPIED FROM experiments/lib, NOT DUPLICATED HERE. It is this
 # repository's single copy of two measured tty rules: type one character at a
@@ -73,6 +82,8 @@ COPY images/netbsd/entrypoint.sh /opt/bsd/entrypoint.sh
 RUN chmod +x /opt/bsd/entrypoint.sh \
  && { \
       echo "image      netbsd"; \
+      echo "variant    ${VARIANT}"; \
+      echo "rootlabel  ${ROOT_LABEL}"; \
       echo "revision   ${SOURCE_COMMIT}"; \
       echo "kernel     ${KERNEL_URL}"; \
       echo "kernel     sha256:${KERNEL_SHA256}"; \

@@ -1,0 +1,153 @@
+#!/bin/sh
+# time-image - how long does the published image take to answer?
+#
+# ⚠ IT IS A TOOL AND NOT AN EXPERIMENT, WHICH IS WHY IT LIVES HERE. An
+# experiment in this repository is a one-off investigation committed with the
+# result it produced. This runs on every push, on a runner, and produces a new
+# number each time. experiments/README.md draws that line.
+#
+# ⭐ THE PUBLISHED IMAGE IS NOT THE THING THAT WAS MEASURED. Every second
+# in docs/LIMITS.md for the container route came from 35-boot-in-container.sh,
+# which fetched the emulator and the guest at run time onto a bind mount. The
+# image IMG-01 publishes bakes all three into layers, and nothing had measured
+# whether that changes the number. "It survives being packaged" was on the list
+# of things this repository does not claim.
+#
+# ⚠ IT IS ALSO THE PORTABILITY PROBE. Every number here came from one Windows
+# laptop. This script takes an image reference and nothing else, so a stranger
+# on any host with a container engine can run it and produce a comparable
+# figure. That is PORT-01, and this is the command it needs.
+#
+# MEASURES. Wall clock milliseconds from `run` to the guest having answered,
+# over several runs, reported as a MEDIAN and never as a best case.
+#
+# ⛔ IT ASSERTS BY READING THE GUEST'S ANSWER. A run whose exit code is 0 and
+# whose stdout does not name a BSD is counted as a failure, because an
+# entrypoint that printed nothing and exited 0 would otherwise time as the
+# fastest boot ever recorded.
+#
+# HOST. Any machine with podman or docker. Nothing else.
+#
+# EXIT. 0 every run answered, 1 at least one did not, 2 a prerequisite is
+# missing.
+
+set -u
+
+IMAGE="${IMAGE:-ghcr.io/pkgforge-dev/netbsd:latest}"
+RUNS="${RUNS:-5}"
+KVM=0
+COMMAND='sysctl -n kern.ostype'
+EXPECT="BSD"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --image)   shift; IMAGE="${1:-}" ;;
+    --runs)    shift; RUNS="${1:-}" ;;
+    --command) shift; COMMAND="${1:-}" ;;
+    --expect)  shift; EXPECT="${1:-}" ;;
+    --kvm)     KVM=1 ;;
+    -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"; exit 0 ;;
+    *) printf 'time-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ENGINE="${ENGINE:-}"
+if [ -z "$ENGINE" ]; then
+  for e in podman docker; do
+    if command -v "$e" >/dev/null 2>&1; then ENGINE=$e; break; fi
+  done
+fi
+[ -n "$ENGINE" ] || { printf 'FAIL: neither podman nor docker is on PATH\n' >&2; exit 2; }
+
+# ⚠ MILLISECONDS OR NOTHING. `date +%s` alone cannot tell a 0.6 second boot
+# from a 1.4 second one, and rounding both to "1" is how a measurement stops
+# measuring. A shell whose date has no %N is refused rather than quietly given
+# whole seconds.
+now_ms() { date +%s%N 2>/dev/null | cut -c1-13; }
+probe=$(now_ms)
+case "$probe" in
+  *N*|'') printf 'FAIL: this host has no date +%%s%%N, so it cannot time this\n' >&2; exit 2 ;;
+esac
+
+# ⚠ TWO BRANCHES RATHER THAN ONE VARIABLE HOLDING A FLAG. A variable expanding
+# to two words is the shape a linter refuses, and quoting it hands the engine
+# `--device /dev/kvm` as ONE argument, which it rejects with an error naming
+# the device. Written out, both are correct and neither is clever.
+DEVICE=none
+[ "$KVM" = 1 ] && DEVICE="/dev/kvm"
+
+run_one() {
+  if [ "$KVM" = 1 ]; then
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i --device /dev/kvm "$IMAGE" sh -c "$COMMAND" 2>/dev/null
+  else
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i "$IMAGE" sh -c "$COMMAND" 2>/dev/null
+  fi
+}
+
+printf '36-time-image\n'
+printf '  engine   %s\n' "$ENGINE"
+printf '  image    %s\n' "$IMAGE"
+printf '  runs     %s\n' "$RUNS"
+printf '  device   %s\n' "$DEVICE"
+printf '  command  %s\n' "$COMMAND"
+printf '\n'
+
+# ⚠ The samples go to a file rather than into a shell variable. A variable
+# holding a list has to be re-split to be sorted, and re-splitting is the one
+# thing a shell does differently everywhere.
+TIMES="${TMPDIR:-/tmp}/time-image.$$"
+: > "$TIMES"
+
+FAILED=0
+i=1
+while [ "$i" -le "$RUNS" ]; do
+  t0=$(now_ms)
+  rc=0
+  # ⛔ The exit code read here is the container's own. A command substitution
+  # passes its child's status through, and nothing is piped.
+  out=$(run_one) || rc=$?
+  t1=$(now_ms)
+  ms=$((t1 - t0))
+
+  ok=no
+  if [ "$rc" = 0 ]; then
+    case "$out" in
+      *"$EXPECT"*) ok=yes ;;
+    esac
+  fi
+
+  if [ "$ok" = yes ]; then
+    printf '%s\n' "$ms" >> "$TIMES"
+    printf '  run %-2s  %6s ms   %s\n' "$i" "$ms" "$out"
+  else
+    FAILED=$((FAILED + 1))
+    printf '  run %-2s  FAILED rc=%s out=%s\n' "$i" "$rc" "$out"
+  fi
+  i=$((i + 1))
+done
+
+printf '\n'
+if [ ! -s "$TIMES" ]; then
+  rm -f "$TIMES"
+  printf 'RESULT image=%s runs=%s answered=0 median_ms=none\n' "$IMAGE" "$RUNS"
+  exit 1
+fi
+
+# ⚠ The MEDIAN, not the mean. One run that hits a cold page cache moves a mean
+# and does not move a median, and a shared runner's variance is that shape.
+sort -n "$TIMES" > "$TIMES.sorted"
+N=$(wc -l < "$TIMES.sorted" | tr -d ' ')
+MID=$(( (N + 1) / 2 ))
+MEDIAN=$(sed -n "${MID}p" "$TIMES.sorted")
+MIN=$(sed -n '1p' "$TIMES.sorted")
+MAX=$(sed -n "${N}p" "$TIMES.sorted")
+rm -f "$TIMES" "$TIMES.sorted"
+
+printf 'RESULT image=%s device=%s answered=%s failed=%s median_ms=%s min_ms=%s max_ms=%s\n' \
+  "$IMAGE" "$DEVICE" "$N" "$FAILED" "$MEDIAN" "$MIN" "$MAX"
+
+[ "$FAILED" -eq 0 ] || exit 1
+exit 0

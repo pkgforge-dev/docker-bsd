@@ -53,10 +53,13 @@
 #   sh scripts/sources --version ID
 #   sh scripts/sources --urls ID             one URL per line
 #   sh scripts/sources --json                a GitHub Actions matrix
-#   sh scripts/sources --runtime-list        every runtime artefact id
-#   sh scripts/sources --runtime-url ID
-#   sh scripts/sources --runtime-sha256 ID
-#   sh scripts/sources --runtime-base        the base image, by digest
+#   sh scripts/sources --runtime-variants          rescue | build
+#   sh scripts/sources --runtime-base              the base image, by digest
+#   sh scripts/sources --runtime-kernel-url        the guest kernel, shared
+#   sh scripts/sources --runtime-kernel-sha256
+#   sh scripts/sources --runtime-rootfs-url VARIANT
+#   sh scripts/sources --runtime-rootfs-sha256 VARIANT
+#   sh scripts/sources --runtime-root-label VARIANT
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -102,26 +105,48 @@ RUNTIME_BASE_PINNED_SHA256="14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff
 # 2026-08-27 and they are the pin.
 SMOL_KERNEL_URL="https://smolbsd.org/assets/netbsd-SMOL"
 SMOL_KERNEL_PINNED_SHA256="63935f0c30ea304b4fb61b942f6f93c0b29a77b913f94b6f2ec7ebd31570a914"
-SMOL_ROOTFS_URL="https://github.com/NetBSDfr/smolBSD/releases/download/latest/rescue-amd64.img.xz"
-SMOL_ROOTFS_PINNED_SHA256="2a5f3ccc4e0266bcbdb3404d55a803533cedba1c0b8c8cac20f52d1419456ea2"
+
+# ⭐ TWO VARIANTS OF ONE IMAGE, AND THEY DIFFER IN THREE VALUES. The rescue
+# userland reaches a shell in seconds and cannot compile anything; the build
+# userland carries a toolchain and pkgsrc and is much larger. ⛔ The root label
+# is the GPT partition name the kernel is told to mount. It was read out of
+# each image rather than guessed, and a wrong one boots a kernel that never
+# finds its disk.
+SMOL_RELEASE="https://github.com/NetBSDfr/smolBSD/releases/download/latest"
+
+SMOL_RESCUE_URL="$SMOL_RELEASE/rescue-amd64.img.xz"
+SMOL_RESCUE_PINNED_SHA256="2a5f3ccc4e0266bcbdb3404d55a803533cedba1c0b8c8cac20f52d1419456ea2"
+SMOL_RESCUE_LABEL="rescueroot"
+
+SMOL_BUILD_URL="$SMOL_RELEASE/build-amd64.img.xz"
+SMOL_BUILD_PINNED_SHA256="04f85df4e5a9b7248bc481552cd6225157de546eba7e5f45f9dc128d1b2e7594"
+SMOL_BUILD_LABEL="buildroot"
 
 ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
 
-runtime_ids() { printf 'kernel\nrootfs\n'; }
+runtime_variants() { printf 'rescue\nbuild\n'; }
 
-runtime_url() {
+rootfs_url() {
   case "$1" in
-    kernel) printf '%s\n' "$SMOL_KERNEL_URL" ;;
-    rootfs) printf '%s\n' "$SMOL_ROOTFS_URL" ;;
-    *) printf 'sources: unknown runtime id: %s\n' "$1" >&2; exit 2 ;;
+    rescue) printf '%s\n' "$SMOL_RESCUE_URL" ;;
+    build)  printf '%s\n' "$SMOL_BUILD_URL" ;;
+    *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
   esac
 }
 
-runtime_sha256() {
+rootfs_sha256() {
   case "$1" in
-    kernel) printf '%s\n' "$SMOL_KERNEL_PINNED_SHA256" ;;
-    rootfs) printf '%s\n' "$SMOL_ROOTFS_PINNED_SHA256" ;;
-    *) printf 'sources: unknown runtime id: %s\n' "$1" >&2; exit 2 ;;
+    rescue) printf '%s\n' "$SMOL_RESCUE_PINNED_SHA256" ;;
+    build)  printf '%s\n' "$SMOL_BUILD_PINNED_SHA256" ;;
+    *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+rootfs_label() {
+  case "$1" in
+    rescue) printf '%s\n' "$SMOL_RESCUE_LABEL" ;;
+    build)  printf '%s\n' "$SMOL_BUILD_LABEL" ;;
+    *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
   esac
 }
 
@@ -183,10 +208,15 @@ case "${1:-}" in
   --version) shift; version "${1:-}" ;;
   --urls)    shift; urls "${1:-}" ;;
   --json)    json ;;
-  --runtime-list)   runtime_ids ;;
-  --runtime-url)    shift; runtime_url "${1:-}" ;;
-  --runtime-sha256) shift; runtime_sha256 "${1:-}" ;;
+  --runtime-variants)     runtime_variants ;;
+  --runtime-kernel-url)    printf '%s
+' "$SMOL_KERNEL_URL" ;;
+  --runtime-kernel-sha256) printf '%s
+' "$SMOL_KERNEL_PINNED_SHA256" ;;
+  --runtime-rootfs-url)    shift; rootfs_url "${1:-}" ;;
+  --runtime-rootfs-sha256) shift; rootfs_sha256 "${1:-}" ;;
+  --runtime-root-label)    shift; rootfs_label "${1:-}" ;;
   --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-list --runtime-url --runtime-sha256 or --runtime-base\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 or --runtime-root-label\n' >&2; exit 2 ;;
 esac

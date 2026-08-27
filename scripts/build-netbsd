@@ -20,6 +20,11 @@
 #   sh scripts/build-netbsd --test-only          prove an already-built image
 #   sh scripts/build-netbsd --registry R --push  build and publish
 #   sh scripts/build-netbsd --tag T              tag other than latest
+#   sh scripts/build-netbsd --variant build      the userland that can compile
+#
+# ⭐ TWO VARIANTS, ONE DEFINITION. `rescue` is the shell in seconds; `build`
+# is the userland with a toolchain and pkgsrc. They differ only in the root
+# filesystem and its label, and scripts/sources holds both.
 #
 # Exit codes: 0 ok, 1 the build or the proof failed, 2 a prerequisite is
 # missing.
@@ -30,6 +35,7 @@ set -eu
 
 REGISTRY="${REGISTRY:-localhost}"
 TAG="${TAG:-latest}"
+VARIANT="${VARIANT:-rescue}"
 DO_TEST=0
 BUILD=1
 PUSH=0
@@ -38,6 +44,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --registry) shift; REGISTRY="${1:-}" ;;
     --tag)      shift; TAG="${1:-}" ;;
+    --variant)  shift; VARIANT="${1:-}" ;;
     --test)     DO_TEST=1 ;;
     --test-only) DO_TEST=1; BUILD=0 ;;
     --push)     PUSH=1 ;;
@@ -66,16 +73,20 @@ command -v "$ENGINE" >/dev/null 2>&1 || {
 
 IMAGE="$REGISTRY/netbsd:$TAG"
 
+# ⛔ AN UNKNOWN VARIANT FAILS HERE, NOT AT THE BUILD. sources exits 2 on one it
+# does not know, and set -e carries that out of this script.
 BASE=$(sh scripts/sources --runtime-base)
-KERNEL_URL=$(sh scripts/sources --runtime-url kernel)
-KERNEL_SHA=$(sh scripts/sources --runtime-sha256 kernel)
-ROOTFS_URL=$(sh scripts/sources --runtime-url rootfs)
-ROOTFS_SHA=$(sh scripts/sources --runtime-sha256 rootfs)
+KERNEL_URL=$(sh scripts/sources --runtime-kernel-url)
+KERNEL_SHA=$(sh scripts/sources --runtime-kernel-sha256)
+ROOTFS_URL=$(sh scripts/sources --runtime-rootfs-url "$VARIANT")
+ROOTFS_SHA=$(sh scripts/sources --runtime-rootfs-sha256 "$VARIANT")
+ROOT_LABEL=$(sh scripts/sources --runtime-root-label "$VARIANT")
 REVISION=$(git rev-parse HEAD 2>/dev/null || echo unknown)
 
 printf 'build-netbsd\n'
 printf '  engine    %s\n' "$ENGINE"
 printf '  image     %s\n' "$IMAGE"
+printf '  variant   %s, root label %s\n' "$VARIANT" "$ROOT_LABEL"
 printf '  base      %s\n' "$BASE"
 printf '  revision  %s\n' "$REVISION"
 
@@ -91,6 +102,8 @@ if [ "$BUILD" = 1 ]; then
     --build-arg "KERNEL_SHA256=$KERNEL_SHA" \
     --build-arg "ROOTFS_URL=$ROOTFS_URL" \
     --build-arg "ROOTFS_SHA256=$ROOTFS_SHA" \
+    --build-arg "ROOT_LABEL=$ROOT_LABEL" \
+    --build-arg "VARIANT=$VARIANT" \
     --build-arg "SOURCE_COMMIT=$REVISION" \
     .
 fi

@@ -1,4 +1,4 @@
-# Build the image that BOOTS a BSD, prove it boots, and publish it.
+# Build the images that BOOT a BSD, prove they boot, time them, publish them.
 #
 # ⭐ THE PROOF IS THE POINT AND IT RUNS HERE. ci.yml says a runner has no BSD
 # kernel and refuses to pretend otherwise, and that is still true: this job
@@ -6,8 +6,7 @@
 # happens to contain an emulator, and the BSD inside it is a guest. That is why
 # this is the one workflow in this repository that can assert on a BSD.
 #
-# ⛔ THREE ASSERTIONS, AND THE SECOND IS THERE BECAUSE THE FIRST ONE ALONE IS
-# THEATRE:
+# ⛔ THE ASSERTIONS, AND THE SECOND EXISTS BECAUSE THE FIRST ALONE IS THEATRE:
 #
 #   1. the guest answers, and names a BSD;
 #   2. ⭐ A COMMAND THAT FAILS IN THE GUEST MAKES THE CONTAINER FAIL. A guard
@@ -15,7 +14,13 @@
 #      defect: it asks the guest to exit 3 and requires exactly 3 back. Without
 #      it, an entrypoint that always exited 0 would pass assertion 1 forever;
 #   3. it needs no network at run time, which is what "baked into layers"
-#      means and the difference between this and the experiment it came from.
+#      means and the difference between this and the experiment it came from;
+#   4. ⭐ for the build variant only, that the userland is REAL: the rescue one
+#      has no `uname` at all, so a `uname` that answers is not a formality.
+#
+# ⚠ THE TIMINGS ARE TAKEN HERE AND NOWHERE ELSE. RULES.md decision 2: the
+# baseline is a free runner, not the developer's laptop. The numbers this job
+# prints are the ones docs/LIMITS.md is allowed to carry.
 #
 # ⛔ Third-party actions are pinned to a COMMIT, not a tag.
 
@@ -27,6 +32,7 @@ on:
     paths:
       - images/netbsd/**
       - experiments/lib/console.py
+      - scripts/time-image
       - scripts/build-netbsd
       - scripts/sources
       - .github/workflows/image-netbsd.yml
@@ -34,6 +40,7 @@ on:
     paths:
       - images/netbsd/**
       - experiments/lib/console.py
+      - scripts/time-image
       - scripts/build-netbsd
       - scripts/sources
       - .github/workflows/image-netbsd.yml
@@ -62,12 +69,23 @@ concurrency:
 
 jobs:
   netbsd:
-    name: build it, prove it boots, publish it
+    name: ${{ matrix.variant }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
+    strategy:
+      # ⛔ NOT fail-fast. Which variant broke is the information this run
+      # exists to produce, and the fast one failing says something different
+      # from the large one failing.
+      fail-fast: false
+      matrix:
+        include:
+          - variant: rescue
+            tag: latest
+          - variant: build
+            tag: build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,12 +102,14 @@ jobs:
           echo "nproc:  $(nproc)"
           if [ -c /dev/kvm ]; then
             echo "kvm:    present, $(ls -l /dev/kvm)"
+            echo "HAVE_KVM=1" >> "$GITHUB_ENV"
           else
             echo "kvm:    ABSENT on this runner"
+            echo "HAVE_KVM=0" >> "$GITHUB_ENV"
           fi
 
       - name: Build
-        run: sh scripts/build-netbsd --tag ci
+        run: sh scripts/build-netbsd --variant "${{ matrix.variant }}" --tag ci
 
       # ── assertion 1: it boots, unaccelerated, with no device handed in ─────
       #
@@ -97,7 +117,7 @@ jobs:
       # This is the claim the whole entry rests on, so the run that proves it
       # must not quietly be given anything.
       - name: A BSD answers, with no privilege and no device
-        run: sh scripts/build-netbsd --tag ci --test-only
+        run: sh scripts/build-netbsd --variant "${{ matrix.variant }}" --tag ci --test-only
 
       # ── assertion 2: the guard is seen to fail ────────────────────────────
       - name: A command that fails in the guest fails the container
@@ -122,6 +142,35 @@ jobs:
             exit 1
           fi
 
+      # ── assertion 4: the build variant carries a real userland ────────────
+      #
+      # ⛔ `uname` IS THE DISCRIMINATING TEST AND NOT A FORMALITY. The rescue
+      # userland does not have it. An assertion that both variants could pass
+      # would not be an assertion about this one.
+      - name: A real userland, with a package manager
+        if: matrix.variant == 'build'
+        run: |
+          rc=0
+          out=$("$ENGINE" run --rm -i localhost/netbsd:ci \
+                sh -c 'uname -sr; command -v pkg_add; command -v pkgin' 2>/dev/null) || rc=$?
+          echo "exit $rc"
+          echo "$out"
+          case "$out" in
+            *pkg_add*) : ;;
+            *) echo "FAIL: no package manager in the build userland"; exit 1 ;;
+          esac
+          if [ "$rc" != "0" ]; then echo "FAIL: exit $rc"; exit 1; fi
+
+      # ── the timings, which are the numbers docs/LIMITS.md may carry ───────
+      - name: Time it, unaccelerated
+        run: |
+          sh scripts/time-image --image localhost/netbsd:ci --runs 5
+
+      - name: Time it with /dev/kvm
+        if: env.HAVE_KVM == '1'
+        run: |
+          sh scripts/time-image --image localhost/netbsd:ci --runs 5 --kvm
+
       - name: What is in it, and what it cost
         run: |
           "$ENGINE" run --rm -i --entrypoint cat localhost/netbsd:ci /opt/bsd/evidence.txt
@@ -143,8 +192,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
         run: |
           reg="ghcr.io/${{ github.repository_owner }}"
-          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:latest"
-          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:${GITHUB_SHA::12}"
-          "$ENGINE" push "$reg/netbsd:latest"
-          "$ENGINE" push "$reg/netbsd:${GITHUB_SHA::12}"
-          echo "published $reg/netbsd:latest and :${GITHUB_SHA::12}"
+          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:${{ matrix.tag }}"
+          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:${{ matrix.variant }}-${GITHUB_SHA::12}"
+          "$ENGINE" push "$reg/netbsd:${{ matrix.tag }}"
+          "$ENGINE" push "$reg/netbsd:${{ matrix.variant }}-${GITHUB_SHA::12}"
+          echo "published $reg/netbsd:${{ matrix.tag }}"
