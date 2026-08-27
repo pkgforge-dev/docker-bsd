@@ -58,12 +58,16 @@ the guest kernel and the guest root filesystem are in the image, so it works
 with `--network none` and needs no privilege, no capability and no device.
 ⚠ `-it` is not optional: what you are given is a console.
 
-**Two variants, and they are for different things:**
+**Two variants, and only one of them is published today:**
 
-| tag | what is in it | use it for |
+| tag | what is in it | state |
 | --- | --- | --- |
-| ⭐ `netbsd:latest` | a rescue userland. A shell and `sysctl`. ⛔ No `uname`, no `ls`, no compiler | seeing that it works, and scripting one `sysctl` |
-| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, and a C and C++ compiler | anything else. It is several times larger and slower to start |
+| ⭐ `netbsd:latest` | a rescue userland. A shell and `sysctl`. ⛔ No `uname`, no `ls`, no compiler | ⭐ **published.** The command above pulls it |
+| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, and a C and C++ compiler | ⛔ **built and proved in CI, not yet published.** `IMG-02` |
+
+⛔ **Do not write a `docker pull` for `netbsd:build` yet.** It does not exist in
+the registry, and a command in a README that returns a 404 is worse than no
+command.
 
 ⛔ **What neither of them does yet:** `-v`, `-p` and `-e` reach the **container**
 and stop there. The BSD is a virtual machine inside it with its own filesystem,
