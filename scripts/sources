@@ -66,6 +66,8 @@
 #   sh scripts/sources --runtime-net VARIANT           none | user
 #   sh scripts/sources --runtime-package-url VARIANT
 #   sh scripts/sources --runtime-package-sha256 VARIANT
+#   sh scripts/sources --runtime-bench-url VARIANT
+#   sh scripts/sources --runtime-bench-sha256 VARIANT
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -179,6 +181,18 @@ SMOL_BUILD_PACKAGES="/guest-package.tgz"
 SMOL_BUILD_PKG_URL="$SMOL_PKG_PATH/gcc14-14.3.0nb1.tgz"
 SMOL_BUILD_PKG_PINNED_SHA256="93c5e1aeda6227915c6a4d70af5b55888760f5015608085617d53459cd76503f"
 
+# ⭐ THE BENCHMARK'S SOURCE SHIPS INSIDE THE GUEST, AND IT HAS TO. `-v` does not
+# reach the guest yet, so there is no way to hand it a source tree at run time.
+# ⛔ Without this the only compile anybody could time inside the guest is one
+# typed at a serial console one character at a time.
+#
+# ⚠ SQLite's amalgamation is the choice because it is a REAL C project in one
+# file: about a quarter of a million lines, no dependencies, no configure step,
+# and the same bytes compile on both sides of the comparison. A synthetic file
+# would measure whatever it was written to measure.
+SMOL_BENCH_URL="https://sqlite.org/2025/sqlite-autoconf-3500400.tar.gz"
+SMOL_BENCH_PINNED_SHA256="a3db587a1b92ee5ddac2f66b3edb41b26f9c867275782d46c3a088977d6a5b18"
+
 ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
 
 runtime_variants() { printf 'rescue\nbuild\n'; }
@@ -212,6 +226,28 @@ rootfs_size() {
     rescue) printf '%s\n' "$SMOL_RESCUE_SIZE" ;;
     build)  printf '%s\n' "$SMOL_BUILD_SIZE" ;;
     *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+bench_url() {
+  case "$1" in
+    rescue) printf '
+' ;;
+    build)  printf '%s
+' "$SMOL_BENCH_URL" ;;
+    *) printf 'sources: unknown variant: %s
+' "$1" >&2; exit 2 ;;
+  esac
+}
+
+bench_sha256() {
+  case "$1" in
+    rescue) printf '
+' ;;
+    build)  printf '%s
+' "$SMOL_BENCH_PINNED_SHA256" ;;
+    *) printf 'sources: unknown variant: %s
+' "$1" >&2; exit 2 ;;
   esac
 }
 
@@ -328,7 +364,9 @@ case "${1:-}" in
   --runtime-net)           shift; rootfs_net "${1:-}" ;;
   --runtime-package-url)    shift; package_url "${1:-}" ;;
   --runtime-package-sha256) shift; package_sha256 "${1:-}" ;;
+  --runtime-bench-url)      shift; bench_url "${1:-}" ;;
+  --runtime-bench-sha256)   shift; bench_sha256 "${1:-}" ;;
   --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages --runtime-pkg-path --runtime-net --runtime-package-url or --runtime-package-sha256\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages --runtime-pkg-path --runtime-net --runtime-package-url --runtime-package-sha256 --runtime-bench-url or --runtime-bench-sha256\n' >&2; exit 2 ;;
 esac

@@ -47,11 +47,28 @@ them: no runner can run one.
 | `/dev/kvm` | a FreeBSD microvm in under two seconds | write access to `/dev/kvm` |
 | a BSD host | ⭐ `podman run` on these images directly | none |
 
-⭐ **The first row is one script away**: [`examples/01-bsd-shell-with-only-podman.sh`](examples/01-bsd-shell-with-only-podman.sh).
+⭐ **The first row is one command, and this repository publishes the image:**
 
-⚠ **It is measured and not yet packaged as an image.** ⛔ This repository does
-**not** publish an image that does it for you. That is the highest-value open
-task and it is filed in [`TODO/INDEX.md`](TODO/INDEX.md).
+```bash
+podman run --rm -it ghcr.io/pkgforge-dev/netbsd:latest sh
+```
+
+⛔ **Nothing is installed and nothing is fetched at run time.** The emulator,
+the guest kernel and the guest root filesystem are in the image, so it works
+with `--network none` and needs no privilege, no capability and no device.
+⚠ `-it` is not optional: what you are given is a console.
+
+**Two variants, and they are for different things:**
+
+| tag | what is in it | use it for |
+| --- | --- | --- |
+| ⭐ `netbsd:latest` | a rescue userland. A shell and `sysctl`. ⛔ No `uname`, no `ls`, no compiler | seeing that it works, and scripting one `sysctl` |
+| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, and a C and C++ compiler | anything else. It is several times larger and slower to start |
+
+⛔ **What neither of them does yet:** `-v`, `-p` and `-e` reach the **container**
+and stop there. The BSD is a virtual machine inside it with its own filesystem,
+so a source tree on your host is not visible to it and nothing you build inside
+comes out. That is filed as `IMG-03` in [`TODO/INDEX.md`](TODO/INDEX.md).
 
 - #### The four, and why they are not handled the same way
 

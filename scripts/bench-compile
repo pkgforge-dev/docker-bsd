@@ -1,0 +1,188 @@
+#!/bin/sh
+# bench-compile - what does a real compile cost inside the guest?
+#
+# ⛔ THE QUESTION THIS PROJECT IS GATED ON. Everything measured before this was
+# time to a shell, which is the cheapest thing a virtual machine ever does: a
+# microvm reaches a prompt fast because it executes very few instructions. A
+# compile is the opposite shape, and nothing here had measured one.
+#
+# ⭐ TWO SIDES, ONE SOURCE FILE, ONE MACHINE. Both compile the SAME BYTES with
+# the same optimisation level, on the same host, minutes apart:
+#
+#   A  the guest      cc -O2 -c sqlite3.c, inside the BSD, inside the image
+#   B  Linux          the same, in an ordinary container on the same host
+#
+# ⛔ BOTH TIME THEMSELVES FROM THE INSIDE. Timing the container from outside
+# would charge side A for the guest's boot and side B for nothing, and the
+# ratio would be a statement about boot time wearing a compiler's clothes. The
+# boot is reported separately, because a consumer pays it too.
+#
+# ⚠ SQLite's amalgamation is the workload because it is a REAL C project in one
+# file, about a quarter of a million lines, with no dependencies and no
+# configure step. It ships inside the image: `-v` does not reach the guest, so
+# there is no other way to give it a source tree.
+#
+# ⚠ THE TWO COMPILERS ARE NOT THE SAME BUILD. The guest has pkgsrc's gcc14 and
+# the Linux side has Alpine's gcc. Both are GCC 14 and neither is a fair proxy
+# for the other to a fraction of a percent. This measures an ORDER OF
+# MAGNITUDE, not a five percent gate; PERF-02 is the entry that owns that.
+#
+# Usage:
+#   sh scripts/bench-compile --image localhost/netbsd:build
+#   sh scripts/bench-compile --image IMAGE --runs 3 --kvm
+#
+# Exit codes: 0 both sides compiled, 1 one did not, 2 a prerequisite is
+# missing.
+#
+# ⛔ Read the exit code from this process, unpiped.
+
+set -u
+
+IMAGE="${IMAGE:-ghcr.io/pkgforge-dev/netbsd:build}"
+RUNS="${RUNS:-1}"
+KVM=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --image) shift; IMAGE="${1:-}" ;;
+    --runs)  shift; RUNS="${1:-}" ;;
+    --kvm)   KVM=1 ;;
+    -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"; exit 0 ;;
+    *) printf 'bench-compile: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT" || { printf 'bench-compile: cannot enter %s\n' "$ROOT" >&2; exit 2; }
+
+ENGINE="${ENGINE:-}"
+if [ -z "$ENGINE" ]; then
+  for e in podman docker; do
+    if command -v "$e" >/dev/null 2>&1; then ENGINE=$e; break; fi
+  done
+fi
+[ -n "$ENGINE" ] || { printf 'FAIL: neither podman nor docker is on PATH\n' >&2; exit 2; }
+
+# ⛔ THE GUEST'S COMPILER IS NOT ON $PATH. pkgsrc installs gcc14 under its own
+# prefix and does not shadow the base system's cc, which does not exist here.
+# A run that called plain `cc` would report "not found" and time it as an
+# instant compile.
+GUEST_CC="/usr/pkg/gcc14/bin/gcc"
+
+# The same line on both sides, give or take where the source lives. ⚠ `date +%s`
+# is whole seconds on both, which is why the workload is a quarter of a million
+# lines rather than a hello world.
+guest_line() {
+  printf '%s' "S=\$(date +%s); $GUEST_CC -O2 -c /sqlite3.c -o /tmp/s.o; R=\$?; E=\$(date +%s); echo \"BENCH rc=\$R seconds=\$((E-S))\""
+}
+
+linux_line() {
+  # shellcheck disable=SC2016
+  # ⛔ The single quotes are the point. This string is a program for ANOTHER
+  # shell, inside a container, and every expansion in it belongs to that shell.
+  # Expanding any of it here would send the compile the wrong file, the wrong
+  # status, or a start time taken on this machine.
+  printf '%s' 'S=$(date +%s); cc -O2 -c /bench/sqlite3.c -o /tmp/s.o; R=$?; E=$(date +%s); echo "BENCH rc=$R seconds=$((E-S))"'
+}
+
+run_guest() {
+  if [ "$KVM" = 1 ]; then
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i --device /dev/kvm -e BSD_CMD_TIMEOUT=7200 \
+      "$IMAGE" sh -c "$(guest_line)" 2>/dev/null
+  else
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i -e BSD_CMD_TIMEOUT=7200 \
+      "$IMAGE" sh -c "$(guest_line)" 2>/dev/null
+  fi
+}
+
+# ⭐ THE LINUX SIDE RUNS IN THE SAME IMAGE, with the entrypoint overridden. That
+# is not a shortcut: it guarantees the same source file, the same base and the
+# same host, so the only thing that differs between the two sides is whether
+# the compiler is running inside the BSD.
+BENCH_HOST_IMAGE="localhost/netbsd-bench-host:latest"
+
+build_host_side() {
+  printf 'FROM %s\nRUN apk add --no-cache gcc musl-dev\n' "$IMAGE" \
+    | MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" build -t "$BENCH_HOST_IMAGE" -f - . >/dev/null 2>&1
+}
+
+run_linux() {
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+    "$ENGINE" run --rm -i --entrypoint sh "$BENCH_HOST_IMAGE" \
+    -c "$(linux_line)" 2>/dev/null
+}
+
+seconds_of() { printf '%s' "$1" | sed -n 's/.*seconds=\([0-9]*\).*/\1/p' | tail -1; }
+rc_of()      { printf '%s' "$1" | sed -n 's/.*rc=\([0-9]*\).*/\1/p' | tail -1; }
+
+printf 'bench-compile\n'
+printf '  engine    %s\n' "$ENGINE"
+printf '  image     %s\n' "$IMAGE"
+printf '  runs      %s\n' "$RUNS"
+printf '  device    %s\n' "$( [ "$KVM" = 1 ] && printf '/dev/kvm' || printf 'none' )"
+printf '  workload  cc -O2 -c sqlite3.c\n'
+printf '\n'
+
+printf 'building the Linux side of the comparison\n'
+if ! build_host_side; then
+  printf 'FAIL: could not build the Linux side\n' >&2
+  exit 1
+fi
+
+GUEST_BEST=""
+LINUX_BEST=""
+FAILED=0
+i=1
+while [ "$i" -le "$RUNS" ]; do
+  g=$(run_guest)
+  gs=$(seconds_of "$g")
+  gr=$(rc_of "$g")
+  l=$(run_linux)
+  ls=$(seconds_of "$l")
+  lr=$(rc_of "$l")
+
+  printf '  run %-2s  guest rc=%s %ss   linux rc=%s %ss\n' \
+    "$i" "${gr:-?}" "${gs:-?}" "${lr:-?}" "${ls:-?}"
+
+  # ⛔ A COMPILE THAT FAILED IS NOT A FAST COMPILE. A missing compiler exits
+  # non-zero in well under a second, and counting that as a sample would
+  # publish the fastest build this project has ever recorded.
+  if [ "${gr:-1}" = "0" ] && [ -n "$gs" ]; then
+    if [ -z "$GUEST_BEST" ] || [ "$gs" -lt "$GUEST_BEST" ]; then GUEST_BEST=$gs; fi
+  else
+    FAILED=$((FAILED + 1))
+  fi
+  if [ "${lr:-1}" = "0" ] && [ -n "$ls" ]; then
+    if [ -z "$LINUX_BEST" ] || [ "$ls" -lt "$LINUX_BEST" ]; then LINUX_BEST=$ls; fi
+  else
+    FAILED=$((FAILED + 1))
+  fi
+  i=$((i + 1))
+done
+
+printf '\n'
+if [ -z "$GUEST_BEST" ] || [ -z "$LINUX_BEST" ]; then
+  printf 'RESULT image=%s guest=none linux=%s ratio=none\n' "$IMAGE" "${LINUX_BEST:-none}"
+  printf 'FAIL: one side never completed a compile\n' >&2
+  exit 1
+fi
+
+# ⚠ Integer arithmetic, to two places, because sh has no floating point and a
+# ratio printed to six digits would be claiming a precision whole seconds
+# cannot support.
+if [ "$LINUX_BEST" -eq 0 ]; then
+  RATIO="linux side was under a second, so no ratio is meaningful"
+else
+  RATIO=$(( GUEST_BEST * 100 / LINUX_BEST ))
+  RATIO="$((RATIO / 100)).$(printf '%02d' $((RATIO % 100)))x"
+fi
+
+printf 'RESULT image=%s guest_s=%s linux_s=%s ratio=%s failed=%s\n' \
+  "$IMAGE" "$GUEST_BEST" "$LINUX_BEST" "$RATIO" "$FAILED"
+
+[ "$FAILED" -eq 0 ] || exit 1
+exit 0

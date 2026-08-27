@@ -21,18 +21,22 @@
 # unchecked filesystem, and the refusal is the useful behaviour: growing a
 # filesystem whose state is unknown is how a corrupt image is made bigger.
 #
-# ⭐ IT ALSO PUTS A FILE INSIDE, AND THAT IS NOT A SIDE ERRAND. The filesystem
+# ⭐ IT ALSO PUTS FILES INSIDE, AND THAT IS NOT A SIDE ERRAND. The filesystem
 # is already extracted at that moment, so writing into it costs one debugfs
-# call and no second extract. The alternative measured on 2026-08-27 was
+# call each and no second extract. The alternative measured on 2026-08-27 was
 # letting the GUEST download the same file through its emulated network stack,
 # which took longer than every other step in the build put together and did not
 # finish inside a runner's hour.
 #
 # Usage:
-#   sh grow-rootfs.sh IMAGE SIZE LABEL [FILE]
-#   e.g. rootfs.img 2G buildroot gcc14.tgz
+#   sh grow-rootfs.sh IMAGE SIZE LABEL [DIR]
+#   e.g. rootfs.img 2G buildroot /inject
 #
-# Needs: sgdisk, e2fsck, resize2fs, dd, truncate, and debugfs for the file.
+# ⚠ DIR is a DIRECTORY and every ordinary file directly inside it is written
+# into the guest's root. A single file argument was the first shape and it did
+# not survive the second thing that needed carrying in.
+#
+# Needs: sgdisk, e2fsck, resize2fs, dd, truncate, and debugfs for the files.
 #
 # Exit codes: 0 grown, 1 it did not grow, 2 a prerequisite is missing.
 
@@ -41,12 +45,12 @@ set -eu
 IMG="${1:-}"
 SIZE="${2:-}"
 LABEL="${3:-}"
-INJECT="${4:-}"
+INJECT="${4:-}"   # a directory, or empty
 
 # ⚠ Written out rather than `A && B || C`, which is not if-then-else: the C
 # branch also runs when B fails. tests/run.sh carries the same note.
 if [ -z "$IMG" ] || [ -z "$SIZE" ] || [ -z "$LABEL" ]; then
-  printf 'grow-rootfs: usage: grow-rootfs.sh IMAGE SIZE LABEL [FILE]\n' >&2
+  printf 'grow-rootfs: usage: grow-rootfs.sh IMAGE SIZE LABEL [DIR]\n' >&2
   exit 2
 fi
 [ -f "$IMG" ] || { printf 'grow-rootfs: no such image: %s\n' "$IMG" >&2; exit 2; }
@@ -96,17 +100,20 @@ resize2fs fs.tmp
 # provisioning step will fail later for a reason nobody will connect to here.
 if [ -n "$INJECT" ]; then
   command -v debugfs >/dev/null 2>&1 || {
-    printf 'grow-rootfs: debugfs is not on PATH and a file was asked for\n' >&2
+    printf 'grow-rootfs: debugfs is not on PATH and files were asked for\n' >&2
     exit 2; }
-  [ -f "$INJECT" ] || {
-    printf 'grow-rootfs: no such file to write in: %s\n' "$INJECT" >&2; exit 2; }
-  base=$(basename "$INJECT")
-  debugfs -w -R "write $INJECT $base" fs.tmp >/dev/null 2>&1 || true
-  if ! debugfs -R "stat $base" fs.tmp 2>/dev/null | grep -q 'Inode:'; then
-    printf 'grow-rootfs: %s did not appear inside the filesystem\n' "$base" >&2
-    exit 1
-  fi
-  printf 'grow-rootfs: wrote %s into the guest root\n' "$base"
+  [ -d "$INJECT" ] || {
+    printf 'grow-rootfs: not a directory: %s\n' "$INJECT" >&2; exit 2; }
+  for f in "$INJECT"/*; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    debugfs -w -R "write $f $base" fs.tmp >/dev/null 2>&1 || true
+    if ! debugfs -R "stat $base" fs.tmp 2>/dev/null | grep -q 'Inode:'; then
+      printf 'grow-rootfs: %s did not appear inside the filesystem\n' "$base" >&2
+      exit 1
+    fi
+    printf 'grow-rootfs: wrote %s into the guest root\n' "$base"
+  done
 fi
 
 dd if=fs.tmp of="$IMG" bs=512 seek="$FIRST" conv=notrunc status=none

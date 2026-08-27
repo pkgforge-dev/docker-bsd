@@ -19,6 +19,41 @@ entry. A superseded one is amended in place with a dated note.
 
 ---
 
+## 2026-08-28
+
+### 2026-08-28T00:40:00Z: an image that boots, published, and a second one with a compiler in it
+
+**Record:** `IMG-01` in [`TODO/images.md`](TODO/images.md), closed in place with
+its acceptance command and output; the timings and sizes in
+[`docs/LIMITS.md`](docs/LIMITS.md).
+**Deployed:** ⭐ **yes.** `ghcr.io/pkgforge-dev/netbsd:latest` on ghcr.io,
+anonymously pullable, built and proved on a free `ubuntu-latest` runner.
+
+⛔ **This repository could prove a BSD shell was reachable from nothing but a
+container engine, and could not hand anybody the image that does it.** That gap
+was invisible from the inside, because the experiment worked.
+
+- ⭐ **The route is packaged.** The emulator, the guest kernel and the guest
+  root filesystem are in layers, so nothing is fetched at run time. Proved by a
+  CI run with `--network none` reaching the same shell.
+- ⛔ **The guard was seen to fail.** CI asks the guest to `exit 3` and requires
+  exactly 3 back, so the acceptance is not an entrypoint that always exits 0.
+- ⭐ **A second variant with a real userland**, `netbsd:build`, carrying
+  `uname`, `make`, `pkg_add` and `pkgin`. Its root filesystem is ext2, so it is
+  grown from Linux with no BSD anywhere, and a compiler is installed at build
+  time rather than left for a consumer to install and lose on the next `--rm`.
+- ⭐ **A timing harness**, [`scripts/time-image`](scripts/time-image), which
+  reports a median over several runs and ⛔ **says which accelerator actually
+  ran** rather than which flag was passed.
+- ⛔ **One measurement was withdrawn inside the same session.** The first runner
+  numbers appeared to say acceleration made the boot slower. That run could not
+  say which accelerator it used, so it is not published.
+  [`docs/LIMITS.md`](docs/LIMITS.md) carries what is known and what is not.
+- ⚠ **`INF-08` filed rather than fixed**: the shared console driver always
+  returns the right answer late, and its twin has to move with it.
+
+---
+
 ## 2026-08-27
 
 ### 2026-08-27T16:00:00Z: the limits are written down, and the backlog comes from them

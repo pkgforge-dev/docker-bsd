@@ -30,6 +30,8 @@ ARG ROOT_LABEL
 ARG ROOTFS_SIZE
 ARG PACKAGE_URL
 ARG PACKAGE_SHA256
+ARG BENCH_URL
+ARG BENCH_SHA256
 
 RUN apk add --no-cache curl xz e2fsprogs e2fsprogs-extra sgdisk
 
@@ -53,11 +55,32 @@ RUN curl -fsSL -o rootfs.img.xz "$ROOTFS_URL" \
 # was measured on 2026-08-27 and took longer than every other step in this file
 # put together. ⛔ The URL carries a version and the digest is checked, which
 # `pkg_add <name>` inside the guest could do neither of.
-RUN if [ -n "$PACKAGE_URL" ]; then \
-      curl -fsSL -o guest-package.tgz "$PACKAGE_URL" \
-   && echo "$PACKAGE_SHA256  guest-package.tgz" | sha256sum -c -; \
+RUN mkdir -p /inject \
+ && if [ -n "$PACKAGE_URL" ]; then \
+      curl -fsSL -o /inject/guest-package.tgz "$PACKAGE_URL" \
+   && echo "$PACKAGE_SHA256  /inject/guest-package.tgz" | sha256sum -c -; \
     else \
       echo "no package asked for"; \
+    fi
+
+# ⭐ THE BENCHMARK'S SOURCE GOES IN THE SAME WAY, FOR A HARDER REASON. `-v` does
+# not reach the guest, so nothing can hand it a source tree at run time at all.
+# ⛔ Without this, the only compile anybody could time inside the guest is one
+# typed at a serial console, one character at a time.
+#
+# ⚠ Two files out of the archive rather than the archive: the guest would have
+# to unpack it otherwise, and unpacking is not the thing being measured.
+RUN mkdir -p /bench \
+ && if [ -n "$BENCH_URL" ]; then \
+      curl -fsSL -o bench.tar.gz "$BENCH_URL" \
+   && echo "$BENCH_SHA256  bench.tar.gz" | sha256sum -c - \
+   && tar xzf bench.tar.gz \
+   && cp ./sqlite-*/sqlite3.c /inject/sqlite3.c \
+   && cp ./sqlite-*/sqlite3.h /inject/sqlite3.h \
+   && cp /inject/sqlite3.c /inject/sqlite3.h /bench/ \
+   && rm -rf bench.tar.gz ./sqlite-*; \
+    else \
+      echo "no benchmark source asked for"; \
     fi
 
 # ⭐ GROWN HERE, BY LINUX, BECAUSE THE GUEST'S ROOT IS ext2 AND NOT FFS. A BSD
@@ -65,12 +88,11 @@ RUN if [ -n "$PACKAGE_URL" ]; then \
 # leave it alone, which is what the rescue variant wants: it is a shell in
 # seconds and nothing is ever installed into it.
 #
-# ⚠ The package goes in on the same pass. The filesystem is already extracted
-# at that point, so writing a file into it is free.
+# ⚠ Everything in /inject goes in on the same pass. The filesystem is already
+# extracted at that point, so writing files into it is free.
 COPY images/netbsd/grow-rootfs.sh /grow-rootfs.sh
 RUN if [ -n "$ROOTFS_SIZE" ]; then \
-      sh /grow-rootfs.sh rootfs.img "$ROOTFS_SIZE" "$ROOT_LABEL" \
-         "$( [ -n "$PACKAGE_URL" ] && echo /art/guest-package.tgz || true )"; \
+      sh /grow-rootfs.sh rootfs.img "$ROOTFS_SIZE" "$ROOT_LABEL" /inject; \
     else \
       echo "grow-rootfs: no size asked for, leaving the root filesystem alone"; \
     fi
@@ -99,6 +121,13 @@ COPY images/netbsd/entrypoint.sh /opt/bsd/entrypoint.sh
 
 ENV BSD_ROOT_LABEL="${ROOT_LABEL}"
 ENV BSD_CMD_TIMEOUT="3000"
+
+# ⚠ MORE MEMORY THAN A CONSUMER GETS, AND ONLY HERE. The default 256 MB is
+# ample for reaching a shell and is the wrong size for unpacking half a
+# gigabyte into an emulated filesystem, where the guest spends its time
+# evicting cache instead of writing. This is a build step, not a run, so the
+# memory costs the consumer nothing.
+ENV BSD_MEM="1024"
 
 # ⛔ NO NETWORK IN THIS STAGE, ON PURPOSE. The package is already inside the
 # guest's filesystem, so installing it is a local file operation. A stage that
@@ -143,6 +172,16 @@ RUN apk add --no-cache qemu-system-x86_64 python3
 
 COPY --from=fetch /art/kernel /guest/kernel
 COPY --from=provision /guest/rootfs.img /guest/rootfs.img
+
+# ⭐ THE BENCHMARK'S SOURCE IS ALSO CARRIED IN THE CONTAINER, NOT ONLY IN THE
+# GUEST, AND THAT IS WHAT MAKES THE COMPARISON FAIR. The other side of the
+# measurement is the same compiler family on Linux, and it has to compile THE
+# SAME BYTES. Two copies of one file inside one image is not a duplicated fact:
+# it is the same file on both sides of an experiment, which is the point.
+#
+# ⚠ Empty on the variant that has no compiler, because a COPY cannot be
+# conditional and a missing path fails the build.
+COPY --from=fetch /bench /bench
 
 # ⛔ THE ROOT LABEL IS BAKED, NOT GUESSED. It is the GPT partition name the
 # guest kernel is told to mount, it differs per variant, and a wrong one boots
