@@ -380,7 +380,27 @@ guest at `/guest-package.tgz`, the root is still grown to hold what it unpacks
 to, and the guest still has a network. Booting the image and running `pkg_add`
 by hand needs no setup at all, which is the cheapest possible starting point.
 
-### ⭐ A CAUSE, FOUND BY MEASURING RATHER THAN BY THE FOURTH GUESS
+### ⭐ WHERE IT IS NOT: EXTRACTION FINISHES, AND THEN IT HANGS
+
+⛔ **The single most useful measurement in this entry.** Run with `-v`, the
+package manager prints every path as it goes, and it reaches the LAST path in
+the archive within **200 seconds**:
+
+```text
+gcc14/share/gcc-14.3.0/python/libstdcxx/v6/xmethods.py
+```
+
+⭐ **So unpacking half a gigabyte takes about three minutes, and the step takes
+more than fifty.** ⛔ **The time is spent AFTER the files are written**, in
+whatever `pkg_add` does next: the package database, `+INSTALL`, checksums. Every
+guess below is about the extraction, and the extraction was never the problem.
+
+⚠ **`pkg_add` prints nothing at all in that phase**, which is why fifty minutes
+of it looked like a stall rather than work.
+
+---
+
+### ⛔ A CAUSE THAT TURNED OUT NOT TO BE THE CAUSE
 
 ⛔ **`/tmp` in the guest is a 32 MB tmpfs, and the compiler is 490 MB.**
 
@@ -393,21 +413,14 @@ tmpfs           32M   4.0K    32M   1% /tmp
 same package by hand reproduces it exactly: 32,772 KB written, then
 `No space left on device`, on a filesystem with 1.4 GB free a directory away.
 
-⛔ **A candidate fix is one environment variable**, and it is a candidate rather
-than the answer until somebody watches it finish:
+⛔ **AND IT DOES NOT FIX IT.** `TMPDIR=/var/tmp pkg_add -U` was run to a
+conclusion and behaved exactly as before: no output, and the driver gave up at
+its timeout after another thirty-six minutes.
 
-```bash
-TMPDIR=/var/tmp pkg_add -U /guest-package.tgz
-```
-
-⚠ **`/var/tmp` is on the root**, which the mount table above shows: only `/tmp`,
-`/dev` and `/etc/openssl` are tmpfs.
-
-⛔ **Do not write this up as solved on the strength of the diagnosis.** The full
-staging area is measured and certain; that it was the ONLY thing wrong is not.
-A run with `TMPDIR` set was still going after ten minutes when this was written,
-which is consistent with a slow install and also consistent with a second
-problem underneath the first.
+⚠ **The full 32 MB `/tmp` is real and it is a real trap for a consumer**, which
+is why it stays written down. ⛔ **It is not what makes the provisioning step
+fail**, and this entry said it might be, which is why it is corrected here
+rather than deleted.
 
 ⚠ **Growing the root filesystem was still necessary and was not sufficient.**
 The published userland has 201 MB free and the installed compiler needs 490 MB,
@@ -443,20 +456,27 @@ the root had 1.4 GB free.
 
 ### Approach
 
-⭐ **Watch `TMPDIR=/var/tmp pkg_add` to a conclusion first.** It either finishes
-or it does not, and that single answer decides whether this entry is a
-one-variable fix or still an open investigation. ⛔ Neither is supported yet.
+⛔ **Look at the phase AFTER extraction, because that is where the time is.**
+The archive is fully written in about three minutes and the step runs for more
+than fifty, so nothing about unpacking, decompressing, disk speed or file count
+can explain the remaining forty-seven.
 
-⭐ **If it finishes**, set `TMPDIR` in
-[`../images/netbsd/Containerfile`](../images/netbsd/Containerfile) and turn the
-step back on in [`../scripts/sources`](../scripts/sources). ⚠ Then measure what
-it costs, because "it finishes" and "it finishes inside a runner's budget" are
-different claims.
+⭐ **The cheapest next tests, in order:**
 
-⚠ **If it does not**, the next measurement is file creation rate. Extracting by
-hand wrote 32 MB in 34 seconds where bulk `dd` does 42 MB per second, which
-hints that metadata operations are the expensive part and that the answer is to
-not boot the guest at all: the root is ext2 and Linux already writes into it.
+1. ⛔ **Not `-U`.** Dropping it was tried: no output and no exit inside twelve
+   minutes, which is the sixth explanation to die here;
+2. ⭐ **run it under `ktrace`, or watch the guest's own `top`.** That answers
+   the one question none of the six guesses could: whether it is spinning in
+   userland or waiting on something. Everything so far has been inferred from
+   the outside;
+3. install with `PKG_DBDIR` pointed at a fresh directory, to find out whether
+   the package database is what it grinds on.
+
+⭐ **If the answer turns out to be `pkg_add` itself rather than the guest, the
+fix is to stop using it here.** The files are already correct on disk after
+three minutes; what is left is bookkeeping this image does not need at build
+time. ⚠ **That trade has to be stated, not slipped in**: an image whose compiler
+is not in the package database is an image where `pkg_info` lies.
 
 ⛔ **And do not leave the trap in place for a consumer.** Somebody who boots the
 build variant and runs `pkg_add` by hand meets exactly this, with the same
