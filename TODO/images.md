@@ -13,7 +13,7 @@ to exist.
 ## IMG-01. `podman run --rm -it <image> sh` drops you in a BSD
 
 **Source** The operator, 2026-08-27, asking the question a consumer asks.
-**Category** images · **Priority** P0 · **Effort** L · **Status** open
+**Category** images · **Priority** P0 · **Effort** L · **Status** done
 
 ### Problem
 
@@ -73,6 +73,45 @@ podman run --rm -i IMAGE sh -c 'sysctl -n kern.ostype'
 ⛔ Exit code 0, read unpiped, stdout naming a BSD. ⚠ **And the same command on a
 host with `podman` freshly installed and nothing else**, because that is the
 claim.
+
+### Closed 2026-08-28
+
+**What shipped.** `ghcr.io/pkgforge-dev/netbsd:latest`, built and proved on a
+free `ubuntu-latest` runner by
+[`../.github/workflows/image-netbsd.yml`](../.github/workflows/image-netbsd.yml),
+from [`../images/netbsd/Containerfile`](../images/netbsd/Containerfile). The
+size and the seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md) and
+nowhere else.
+
+**The acceptance command, run against the PUBLISHED image**, pulled from the
+registry on a machine that had just deleted its local copy:
+
+```text
+$ podman run --rm -i ghcr.io/pkgforge-dev/netbsd:latest sh -c 'sysctl -n kern.ostype'
+smolBSD
+exit 0
+```
+
+**Every requirement of this entry, and where it is met:**
+
+| the requirement | where |
+| --- | --- |
+| artefacts in layers, nothing fetched at run time | ⭐ proved by a run with `--network none` in CI, which reaches the same shell |
+| every artefact pinned by digest | [`../scripts/sources`](../scripts/sources). ⚠ One exception is labelled rather than hidden: the emulator comes from a package branch with no snapshot to pin to, and its resolved version is written into the image |
+| `/dev/kvm` used when present, emulation when not, with no flag | [`../images/netbsd/entrypoint.sh`](../images/netbsd/entrypoint.sh) |
+| built and tested on a free GitHub runner | the workflow above |
+| named `netbsd` | [`RULES.md`](RULES.md) decision 1 |
+| anonymously pullable | checked against the registry without credentials, HTTP 200 |
+
+⛔ **The guard was seen to fail, which is why the proof is not theatre.** CI asks
+the guest to `exit 3` and requires exactly 3 back. An entrypoint that always
+exited 0 would pass the acceptance command above for ever.
+
+⚠ **What did NOT close with it.** The second half of the entry's own Prove line
+said "on a host with podman freshly installed and nothing else". The runner is
+close to that and is not it: podman was already there. `PORT-01` owns the rest,
+and [`../scripts/time-image`](../scripts/time-image) is the one command it
+needs.
 
 ---
 

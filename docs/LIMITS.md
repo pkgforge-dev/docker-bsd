@@ -19,6 +19,7 @@ host, on macOS, or on arm64.
 | --- | --- | --- | --- |
 | ⭐ **only podman or docker** | a **NetBSD** shell | ⭐ **2.6 s** | ⭐ **none** |
 | ⭐ the same, plus `--device /dev/kvm` | the same shell | ⭐ **0.6 s** | one device |
+| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **3.0 s** | ⭐ **none** |
 | an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | ⚠ **114 to 118 s** | ⭐ none |
 | a Linux host or WSL2 machine with `/dev/kvm` | a **FreeBSD 15.1** userland | 1.8 s | write access to `/dev/kvm` |
 | a BSD host already | ⭐ `podman run` on the images this repository publishes | seconds | none |
@@ -80,9 +81,66 @@ shell.**
   have `uname`, `tail`, or a package manager.
 - ⚠ **Compute inside it is emulated**, so it is the wrong place to build
   anything. Reaching a shell is cheap because the work is small.
-- ⚠ **`podman run --rm -it ghcr.io/pkgforge-dev/freebsd:latest sh` does not do
-  this yet.** ⛔ **This repository does not publish that image.** The route is
-  measured; the packaging is not built. It is the highest-value open task.
+
+---
+
+## ⭐ 1b. The published image, measured on a free GitHub runner
+
+⭐ **The route in section 1 is now packaged, and the packaging was measured
+where it will be used.** [`RULES.md`](../TODO/RULES.md) decision 2: the baseline
+is a free runner, not the developer's laptop.
+
+```bash
+podman run --rm -it ghcr.io/pkgforge-dev/netbsd:latest sh
+```
+
+⛔ **Nothing is fetched at run time.** The emulator, the guest kernel and the
+guest root filesystem are in layers. The same run with `--network none` reaches
+the same shell, which is what proves it.
+
+### The conditions, so the numbers mean something
+
+| | |
+| --- | --- |
+| runner | `ubuntu-latest`, Linux 6.17.0-1022-azure x86_64, **4 vCPU** |
+| engine | podman, rootless, no `--privileged`, no capability |
+| `/dev/kvm` on the runner | ⭐ **present**, `crw-rw---- root kvm` |
+| what is timed | ⛔ **the whole `podman run`**, to the guest's answer on stdout. Not the kernel's own boot time |
+| how | median of five, by [`../scripts/time-image`](../scripts/time-image) |
+
+### What it costs
+
+| variant | userland | image | to an answer, no device |
+| --- | --- | --- | --- |
+| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **2981 ms** (2918 to 3031) |
+| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add`, `pkgin` | 671 MB before provisioning | **11518 ms** (10917 to 11525) |
+
+⚠ **The runner is about 400 ms slower to a shell than the laptop in section 1**,
+over a different measurement: section 1 timed the guest reaching a prompt inside
+an already-running container, and this times `podman run` end to end. ⛔ **They
+are not the same quantity and subtracting one from the other would be
+inventing a number.**
+
+⛔ **The build variant costs four times as long to reach a shell**, and that is
+the price of a userland that can do something rather than answer.
+
+### ⚠ What `--device /dev/kvm` did on the runner, and why it is not published
+
+⛔ **The first runner measurement said acceleration made the boot SLOWER**:
+3442 ms against 2981 ms, consistently, across five runs each.
+
+⚠ **That result is withdrawn until the harness can tell what it measured.** The
+image falls back to emulation, correctly and silently, when `/dev/kvm` is
+present and cannot be opened, which is the ordinary case for a rootless
+container. So the comparison may have been between an unaccelerated run and a
+slightly slower unaccelerated run, and the flag's only effect was the device
+setup. [`../scripts/time-image`](../scripts/time-image) now reports which
+accelerator actually ran, and the answer goes here when it has been read rather
+than assumed.
+
+⭐ **Note what this does not touch.** Boot time is not throughput. A guest that
+executes very few instructions before reaching a prompt is the case where an
+accelerator has least to win, and a compile is the opposite case.
 
 ---
 

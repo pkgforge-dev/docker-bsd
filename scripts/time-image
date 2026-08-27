@@ -87,6 +87,21 @@ run_one() {
   fi
 }
 
+# ⛔ A SECOND FUNCTION, BECAUSE THE FIRST ONE THROWS AWAY THE ANSWER. run_one
+# discards stderr so that the guest's stdout is the only thing timed, and the
+# image reports which accelerator it chose ON STDERR. Reading the accelerator
+# out of run_one therefore reads nothing at all, and reports `unreported` over
+# a run that said exactly what it did. Measured 2026-08-28, by doing it.
+probe_one() {
+  if [ "$KVM" = 1 ]; then
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i --device /dev/kvm "$IMAGE" sh -c "$COMMAND"
+  else
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      "$ENGINE" run --rm -i "$IMAGE" sh -c "$COMMAND"
+  fi
+}
+
 printf 'time-image\n'
 printf '  engine   %s\n' "$ENGINE"
 printf '  image    %s\n' "$IMAGE"
@@ -104,7 +119,7 @@ printf '  command  %s\n' "$COMMAND"
 #
 # ⚠ It is a separate, untimed run. It costs one extra boot and it is the
 # difference between a number and a claim.
-ACCEL=$( { run_one >/dev/null; } 2>&1 | sed -n 's/.*accel=\([a-z]*\).*/\1/p' | tail -1 )
+ACCEL=$( { probe_one >/dev/null; } 2>&1 | sed -n 's/.*accel=\([a-z]*\).*/\1/p' | tail -1 )
 [ -n "$ACCEL" ] || ACCEL=unreported
 printf '  accel    %s\n' "$ACCEL"
 printf '\n'

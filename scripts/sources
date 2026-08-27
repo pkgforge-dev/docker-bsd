@@ -63,6 +63,7 @@
 #   sh scripts/sources --runtime-rootfs-size VARIANT   empty means do not grow
 #   sh scripts/sources --runtime-packages VARIANT      empty means install none
 #   sh scripts/sources --runtime-pkg-path              the package repository
+#   sh scripts/sources --runtime-net VARIANT           none | user
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -135,6 +136,18 @@ SMOL_BUILD_LABEL="buildroot"
 # ⚠ 2G IS A CHOICE AND NOT A MEASUREMENT. gcc14 is 107 MB compressed and about
 # a quarter of a gigabyte installed; the rest is room for whatever a consumer
 # is building. A bigger number is a bigger image on every consumer's disk.
+# ⚠ THE NETWORK IS A PER VARIANT DECISION AND NOT A PREFERENCE. A package
+# manager with no network is a package manager that cannot do its one job, so
+# the build variant ships with a user-mode stack. The rescue variant exists to
+# reach a shell quickly and never installs anything, so it ships with none: the
+# emulator attaches an interface unless told not to, and this repository has
+# already published a wrong measurement over that.
+#
+# ⭐ It is user mode, so it needs no privilege and opens no port on the host,
+# and `--network none` on the container still cuts it off completely.
+SMOL_RESCUE_NET="none"
+SMOL_BUILD_NET="user"
+
 SMOL_RESCUE_SIZE=""
 SMOL_RESCUE_PACKAGES=""
 SMOL_BUILD_SIZE="2G"
@@ -178,6 +191,17 @@ rootfs_size() {
     rescue) printf '%s\n' "$SMOL_RESCUE_SIZE" ;;
     build)  printf '%s\n' "$SMOL_BUILD_SIZE" ;;
     *) printf 'sources: unknown variant: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+rootfs_net() {
+  case "$1" in
+    rescue) printf '%s
+' "$SMOL_RESCUE_NET" ;;
+    build)  printf '%s
+' "$SMOL_BUILD_NET" ;;
+    *) printf 'sources: unknown variant: %s
+' "$1" >&2; exit 2 ;;
   esac
 }
 
@@ -258,7 +282,8 @@ case "${1:-}" in
   --runtime-rootfs-size)   shift; rootfs_size "${1:-}" ;;
   --runtime-packages)      shift; rootfs_packages "${1:-}" ;;
   --runtime-pkg-path)      printf '%s\n' "$SMOL_PKG_PATH" ;;
+  --runtime-net)           shift; rootfs_net "${1:-}" ;;
   --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages or --runtime-pkg-path\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-variants --runtime-base --runtime-kernel-url --runtime-kernel-sha256 --runtime-rootfs-url --runtime-rootfs-sha256 --runtime-root-label --runtime-rootfs-size --runtime-packages --runtime-pkg-path or --runtime-net\n' >&2; exit 2 ;;
 esac

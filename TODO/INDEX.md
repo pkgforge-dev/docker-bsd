@@ -14,16 +14,16 @@ between the two. It runs as a gate.
 ## Counts
 
 ```text
-total 20  open 19  blocked 0  done 1
+total 20  open 18  blocked 0  done 2
 ```
 
 | priority | open | blocked | done | total |
 | --- | --- | --- | --- | --- |
-| P0 | 2 | 0 | 0 | 2 |
+| P0 | 1 | 0 | 1 | 2 |
 | P1 | 11 | 0 | 0 | 11 |
 | P2 | 6 | 0 | 0 | 6 |
 | P3 | 0 | 0 | 1 | 1 |
-| **all** | **19** | **0** | **1** | **20** |
+| **all** | **18** | **0** | **2** | **20** |
 
 ---
 
@@ -33,7 +33,7 @@ total 20  open 19  blocked 0  done 1
 | --- | --- | --- | --- | --- | --- |
 | BSD-01 | P1 | M | open | Run a BSD userland from Windows, with the least friction that works | [`bsd.md`](bsd.md) |
 | BSD-02 | P3 | S | done | Whether the other three BSDs can be run, not merely built | [`bsd.md`](bsd.md) |
-| IMG-01 | P0 | L | open | `podman run --rm -it <image> sh` drops you in a BSD | [`images.md`](images.md) |
+| IMG-01 | P0 | L | done | `podman run --rm -it <image> sh` drops you in a BSD | [`images.md`](images.md) |
 | IMG-02 | P0 | L | open | A real userland in it, not a rescue shell | [`images.md`](images.md) |
 | IMG-03 | P1 | M | open | The flags a consumer already knows must reach the guest | [`images.md`](images.md) |
 | INF-01 | P2 | M | open | Every published image carries provenance and an evidence file | [`infrastructure.md`](infrastructure.md) |
