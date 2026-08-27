@@ -21,7 +21,7 @@ Linux running on hardware somebody owns.
 | --- | --- | --- | --- |
 | ⭐ **only podman or docker** | a **NetBSD** shell | ⭐ **2.6 s** | ⭐ **none** |
 | ⭐ the same, plus `--device /dev/kvm` | the same shell | ⭐ **0.6 s** | one device |
-| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **4.2 s** | ⭐ **none** |
+| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **2.9 to 4.2 s** | ⭐ **none** |
 | an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | ⚠ **114 to 118 s** | ⭐ none |
 | a Linux host or WSL2 machine with `/dev/kvm` | a **FreeBSD 15.1** userland | 1.8 s | write access to `/dev/kvm` |
 | a BSD host already | ⭐ `podman run` on the images this repository publishes | seconds | none |
@@ -114,8 +114,29 @@ the same shell, which is what proves it.
 
 | variant | userland | image | to an answer, no device |
 | --- | --- | --- | --- |
-| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **4157 ms** (3757 to 4162) |
-| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add` and `pkgin` | **2291 MB**, grown to hold a toolchain | **12959 ms** (12543 to 13378) |
+| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **2927 ms** and **4157 ms** |
+| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add` and `pkgin` | **2291 MB**, grown to hold a toolchain | **13137 ms** and **12959 ms** |
+
+### ⛔ TWO NUMBERS PER ROW, AND THAT IS THE MOST IMPORTANT THING ON THIS PAGE
+
+⚠ **Those pairs are two runs of the same command on the same image, hours
+apart, each a median of five.** The rescue variant answered in **2927 ms**
+(2920 to 2935) on one runner and **4157 ms** (3757 to 4162) on another.
+
+⛔ **That is a 42 percent spread between runs, and under 1 percent within a
+run.** A free runner is a shared machine and its neighbours are not visible.
+
+⭐ **What that means for `PERF-03`, which has a 5 percent gate:** a ratio built
+from two numbers taken in different jobs cannot see 5 percent, because the
+runner moves by eight times that between jobs. ⛔ **Both sides have to be
+measured in the same job**, which [`RULES.md`](../TODO/RULES.md) decision 2
+already requires for a different reason, and the run-to-run figure is what makes
+that requirement load bearing rather than tidy.
+
+⚠ **The build variant did not move**, 12959 and 13137, which is under 2 percent.
+⛔ **Do not read that as it being more stable.** Two samples of each is not a
+distribution, and the honest statement is that one pair moved a lot and one did
+not.
 
 ⚠ **The runner and the laptop are within about half a second of each other on
 this**, which is worth noticing and not worth explaining: the laptop's own
@@ -139,11 +160,23 @@ That reads as a claim about acceleration and it is not one. ⛔ **Measured again
 with a harness that reports which accelerator actually ran, and with the
 container's own view of the device read rather than assumed:**
 
+⚠ **All three rows are from ONE run**, so they are comparable with each other
+and not with the table above.
+
 | what was passed | what the guest used | median |
 | --- | --- | --- |
-| nothing | `tcg` | **4157 ms** |
-| ⛔ `--device /dev/kvm` | ⛔ **`tcg`, after trying and failing** | 4655 ms |
-| ⛔ the same, plus `--group-add keep-groups` | ⛔ **`tcg`, still** | 4602 ms |
+| nothing | `tcg` | **2927 ms** |
+| ⛔ `--device /dev/kvm` | ⛔ **`tcg`, after trying and failing** | 3425 ms |
+| ⛔ the same, plus `--group-add keep-groups` | ⛔ **`tcg`, still** | 3425 ms |
+
+⭐ **And the image now says why, in its own words**, which is what the harness
+reports beside the accelerator:
+
+```text
+accel    tcg
+note     netbsd: /dev/kvm was handed in and the emulator could not use it,
+         so this is running unaccelerated.
+```
 
 ⛔ **The device reaches the container and the emulator cannot open it.** Read
 from inside the container, with the device handed in:

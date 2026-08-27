@@ -59,9 +59,14 @@ fact, one home.
 
 ---
 
-## ⭐ The five findings that change what the next session does
+## ⭐ The six findings that change what the next session does
 
-1. ⛔ **A free runner cannot use `/dev/kvm`, and every obvious way of checking
+1. ⛔ **A free runner moves by 42 percent between jobs and under 1 percent
+   within one.** The same command on the same image: 2927 ms on one runner,
+   4157 ms on another, each a median of five. ⭐ **That is eight times the gate
+   `PERF-03` has to measure**, so a ratio built from two different jobs cannot
+   see it at all. Both sides in the same job, or the number means nothing.
+2. ⛔ **A free runner cannot use `/dev/kvm`, and every obvious way of checking
    says it can.** The node arrives as `crw-rw---- nobody nobody`, the process is
    root only inside a user namespace, and ⛔ **`test -r` and `test -w` both
    answer yes anyway**, because for uid 0 they are not a permission check. The
@@ -69,21 +74,21 @@ fact, one home.
    wrong mechanism before the container's own view was read**: first as
    "acceleration is slower on CI", then as "the image never tried". It tries,
    fails in under a second, and falls back. On the laptop it halves the time.
-2. ⛔ **The guest's emulated network is slow enough to dominate anything that
+3. ⛔ **The guest's emulated network is slow enough to dominate anything that
    uses it.** Fetching one compiler through it took longer than every other
    step in the image build put together and did not finish inside a runner's
    hour. The same file over the container's own network takes seconds. ⚠ **Any
    benchmark that resolves dependencies is measuring the network.**
    ⛔ **And moving the fetch out did not make the step fast**, which is `INF-09`
    and is still unexplained: three guesses were tested and all three are dead.
-3. ⭐ **The guest's root filesystem is ext2, not FFS**, which is why it can be
+4. ⭐ **The guest's root filesystem is ext2, not FFS**, which is why it can be
    grown and written into from Linux with no BSD anywhere. That is what made a
    compiler in the image possible at all: the published userland has 201 MB
    free and the compiler needs 490 MB.
-4. ⛔ **A device declared after its backend is accepted, starts, and never
+5. ⛔ **A device declared after its backend is accepted, starts, and never
    reaches the guest.** `-netdev` then `-device` gives a guest with no network
    interface and no error anywhere. Reversed, it attaches.
-5. ⛔ **The shared console driver returns the right answer late, always.** It
+6. ⛔ **The shared console driver returns the right answer late, always.** It
    decides a command has finished by counting prompts with a pattern that can
    only ever match once. Filed as `INF-08` rather than patched in passing.
 

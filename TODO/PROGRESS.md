@@ -89,6 +89,12 @@ to run and the build variant gave them something to compile with.
 ⚠ **Two facts from this session change how they must be approached**, and both
 are in [`../docs/LIMITS.md`](../docs/LIMITS.md):
 
+- ⛔ **A free runner moves by 42 percent between jobs, and by under 1 percent
+  within one.** The same command on the same image answered in 2927 ms on one
+  runner and 4157 ms on another. ⭐ **`PERF-03`'s 5 percent gate is invisible to
+  any ratio built across two jobs**, which is what makes `RULES.md` decision 2
+  load bearing rather than tidy: both sides in the same job, or the number means
+  nothing.
 - ⛔ **A free runner cannot use `/dev/kvm`, and every obvious check says it
   can.** The node arrives as `crw-rw---- nobody nobody` and the process is root
   only inside a user namespace, so `test -r` and `test -w` answer yes over a
