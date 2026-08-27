@@ -5,9 +5,11 @@ seconds.** ⛔ **This is the only page in the repository carrying those
 numbers.** Everything else points here, so there is nothing to cross-check and
 nothing to drift.
 
-⚠ **Every number was measured on one machine**, described once in
-[`environment.md`](environment.md). ⛔ Nothing here has been measured on a Linux
-host, on macOS, or on arm64.
+⚠ **Most numbers here were measured on one machine**, described once in
+[`environment.md`](environment.md). ⭐ **Section 1b is the exception**: it was
+measured on a free GitHub runner, which is a Linux host and also a cloud
+virtual machine. ⛔ Nothing here has been measured on macOS, on arm64, or on
+Linux running on hardware somebody owns.
 
 ⛔ **A limit here is measured or it is labelled.** Never estimated.
 
@@ -19,7 +21,7 @@ host, on macOS, or on arm64.
 | --- | --- | --- | --- |
 | ⭐ **only podman or docker** | a **NetBSD** shell | ⭐ **2.6 s** | ⭐ **none** |
 | ⭐ the same, plus `--device /dev/kvm` | the same shell | ⭐ **0.6 s** | one device |
-| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **3.0 s** | ⭐ **none** |
+| ⭐ **the published image**, on a free CI runner | a **NetBSD** shell | ⭐ **3.6 s** | ⭐ **none** |
 | an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | ⚠ **114 to 118 s** | ⭐ none |
 | a Linux host or WSL2 machine with `/dev/kvm` | a **FreeBSD 15.1** userland | 1.8 s | write access to `/dev/kvm` |
 | a BSD host already | ⭐ `podman run` on the images this repository publishes | seconds | none |
@@ -112,33 +114,49 @@ the same shell, which is what proves it.
 
 | variant | userland | image | to an answer, no device |
 | --- | --- | --- | --- |
-| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **2981 ms** (2918 to 3031) |
-| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add`, `pkgin` | 671 MB before provisioning | **11518 ms** (10917 to 11525) |
+| ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **3552 ms** (3543 to 3747) |
+| `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add`, `pkgin` and a compiler | 671 MB before it was grown and provisioned | **11518 ms** (10917 to 11525) |
 
-⚠ **The runner is about 400 ms slower to a shell than the laptop in section 1**,
-over a different measurement: section 1 timed the guest reaching a prompt inside
-an already-running container, and this times `podman run` end to end. ⛔ **They
-are not the same quantity and subtracting one from the other would be
-inventing a number.**
+⚠ **The runner and the laptop are within 100 ms of each other on this**, which
+is worth noticing and not worth explaining: the laptop's own figure with the
+published image is 3629 ms, over the same command. ⛔ **Neither is comparable to
+the 2.6 s in section 1**, which timed the guest reaching a prompt inside an
+already-running container rather than a whole `podman run`. Subtracting one from
+the other would be inventing a number.
 
 ⛔ **The build variant costs four times as long to reach a shell**, and that is
 the price of a userland that can do something rather than answer.
 
-### ⚠ What `--device /dev/kvm` did on the runner, and why it is not published
+### ⛔ `--device /dev/kvm` does NOT accelerate anything on a free runner
 
-⛔ **The first runner measurement said acceleration made the boot SLOWER**:
-3442 ms against 2981 ms, consistently, across five runs each.
+⭐ **This is the most useful thing measured on the runner, and it was nearly
+published backwards.**
 
-⚠ **That result is withdrawn until the harness can tell what it measured.** The
-image falls back to emulation, correctly and silently, when `/dev/kvm` is
-present and cannot be opened, which is the ordinary case for a rootless
-container. So the comparison may have been between an unaccelerated run and a
-slightly slower unaccelerated run, and the flag's only effect was the device
-setup. [`../scripts/time-image`](../scripts/time-image) now reports which
-accelerator actually ran, and the answer goes here when it has been read rather
-than assumed.
+The first measurement said the device made the boot **slower**: 3442 ms against
+2981 ms, consistently. That reads as a claim about acceleration and it is not
+one. ⛔ **Measured again with a harness that reports which accelerator actually
+ran:**
 
-⭐ **Note what this does not touch.** Boot time is not throughput. A guest that
+| what was passed | what the guest used | median |
+| --- | --- | --- |
+| nothing | `tcg` | **3552 ms** |
+| ⛔ `--device /dev/kvm` | ⛔ **`tcg`, still** | 4058 ms |
+
+⛔ **The device reached the container and could not be opened.** `/dev/kvm` is
+`crw-rw---- root kvm`, the engine on that runner is rootless, and the container
+is not in that group. The image falls back to emulation, correctly and
+silently, and the flag's only measurable effect was the cost of attaching a
+device nothing then used.
+
+⚠ **So the honest statement is not "acceleration is slower on CI".** It is
+**"acceleration was never on"**, and the ~500 ms difference is the price of
+asking for a device.
+
+⭐ **What a consumer should take from this:** on a rootless engine, handing in
+`/dev/kvm` is not enough. The container has to be able to open it, and that
+needs the group as well as the node.
+
+⭐ **Note what none of this touches.** Boot time is not throughput. A guest that
 executes very few instructions before reaching a prompt is the case where an
 accelerator has least to win, and a compile is the opposite case.
 
@@ -178,19 +196,38 @@ not asking the host kernel to run BSD code at all.
 
 ### Q. Does it work everywhere? On Linux? On CI?
 
-⚠ **MEASURED ON EXACTLY ONE PATH**: a container running inside the WSL2
-Linux machine on one Windows host, with podman.
+⭐ **Two hosts now, not one, and the second is a free GitHub runner.** The
+command is [`../scripts/time-image`](../scripts/time-image), which takes an
+image reference and prints a `RESULT` line, so a stranger can produce a
+comparable figure.
 
 | host | state |
 | --- | --- |
-| Windows, via a podman or docker machine | ⭐ **measured** |
-| native Linux | ⚠ **INFERRED, not measured.** The container is a Linux container either way, so a native host is the same code path with one layer removed. Nothing has run it |
-| GitHub CI, `x86_64` | ⚠ **inferred.** The unaccelerated path needs nothing a runner lacks. `/dev/kvm` on those runners is a sourced claim, not one measured here |
-| CI, arm64 | ⛔ **expected to fail as written.** The artefacts are `amd64`, and those runners have no `/dev/kvm`, so it would be emulating a foreign architecture as well as a foreign OS |
-| macOS | ⛔ **not attempted** |
+| ⭐ Windows, via a podman machine, with the **published image** | ⭐ **measured.** `RESULT device=none accel=tcg median_ms=3629` |
+| ⭐ **GitHub CI, `ubuntu-latest`, `x86_64`** | ⭐ **measured.** See section 1b |
+| native Linux, on hardware somebody owns | ⚠ **still inferred.** A GitHub runner is a Linux host and it is also a virtual machine in a cloud, which is not the same question as a laptop running Linux |
+| CI, arm64 | ⛔ **expected to fail as written.** The artefacts are `amd64`, so it would be emulating a foreign architecture as well as a foreign operating system |
+| macOS | ⛔ **not attempted.** Nobody here has one |
 
-⛔ **So "it works everywhere" is not a claim this repository can make today.**
-It is a reasonable expectation with one datapoint under it.
+⛔ **So "it works everywhere" is still not a claim this repository can make.**
+It has two datapoints and two named gaps, which is different from one datapoint
+and an expectation.
+
+### ⭐ What `/dev/kvm` is worth, and it is not the same in both places
+
+⛔ **Measured with a harness that reports which accelerator actually ran**,
+because handing in the device is not the same as using it: the node can be
+present and unopenable, and the image falls back to emulation silently and
+correctly.
+
+| host | no device | with `--device /dev/kvm` |
+| --- | --- | --- |
+| ⭐ the Windows laptop's podman machine | `accel=tcg`, **3604 ms** | ⭐ `accel=kvm`, **1777 ms** |
+| a free GitHub runner | ⚠ see section 1b. The first measurement said the device made it **slower**, and could not say which accelerator it used, so it is withdrawn rather than published |
+
+⚠ **The laptop's `/dev/kvm` is itself nested**, inside the WSL2 machine, and a
+runner's is nested inside a cloud VM. ⛔ **Neither is bare metal**, and nothing
+here has measured one that is.
 
 ### Q. Do I really need no setup, and do my usual flags work?
 

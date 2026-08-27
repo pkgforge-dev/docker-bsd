@@ -171,6 +171,33 @@ jobs:
         run: |
           sh scripts/time-image --image localhost/netbsd:ci --runs 5 --kvm
 
+      # ⛔ WHY THE DEVICE DID NOT HELP, READ RATHER THAN GUESSED. The step above
+      # hands in /dev/kvm and the image still reports accel=tcg, which means the
+      # node reached the container and could not be opened. This prints what the
+      # container actually sees, so the explanation is a reading and not a
+      # story. ⚠ It does not fail the build: it is a fact about the runner.
+      - name: What the container sees of /dev/kvm
+        if: env.HAVE_KVM == '1'
+        continue-on-error: true
+        run: |
+          echo "== the runner's own view =="
+          id
+          ls -l /dev/kvm
+          echo "== inside the container, device handed in =="
+          "$ENGINE" run --rm -i --device /dev/kvm --entrypoint sh localhost/netbsd:ci \
+            -c 'id; ls -l /dev/kvm; if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "openable: yes"; else echo "openable: NO"; fi'
+          echo "== the same, with the group kept =="
+          "$ENGINE" run --rm -i --device /dev/kvm --group-add keep-groups --entrypoint sh localhost/netbsd:ci \
+            -c 'id; if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "openable: yes"; else echo "openable: NO"; fi' \
+            || echo "the engine refused --group-add keep-groups"
+
+      - name: Time it with /dev/kvm and the group kept
+        if: env.HAVE_KVM == '1'
+        continue-on-error: true
+        run: |
+          ENGINE_EXTRA="--group-add keep-groups" sh scripts/time-image \
+            --image localhost/netbsd:ci --runs 5 --kvm
+
       - name: What is in it, and what it cost
         run: |
           "$ENGINE" run --rm -i --entrypoint cat localhost/netbsd:ci /opt/bsd/evidence.txt

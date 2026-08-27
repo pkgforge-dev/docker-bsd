@@ -77,13 +77,22 @@ esac
 DEVICE=none
 [ "$KVM" = 1 ] && DEVICE="/dev/kvm"
 
+# ⚠ ENGINE_EXTRA IS FOR THE ENGINE, NOT THE GUEST, and it is deliberately
+# unquoted so that a caller can pass more than one word. It exists because
+# `--device /dev/kvm` alone was measured NOT to be enough on a rootless engine:
+# the node reaches the container and cannot be opened. A caller comparing that
+# against `--group-add keep-groups` needs to be able to say so.
+ENGINE_EXTRA="${ENGINE_EXTRA:-}"
+
 run_one() {
   if [ "$KVM" = 1 ]; then
+    # shellcheck disable=SC2086
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-      "$ENGINE" run --rm -i --device /dev/kvm "$IMAGE" sh -c "$COMMAND" 2>/dev/null
+      "$ENGINE" run --rm -i --device /dev/kvm $ENGINE_EXTRA "$IMAGE" sh -c "$COMMAND" 2>/dev/null
   else
+    # shellcheck disable=SC2086
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-      "$ENGINE" run --rm -i "$IMAGE" sh -c "$COMMAND" 2>/dev/null
+      "$ENGINE" run --rm -i $ENGINE_EXTRA "$IMAGE" sh -c "$COMMAND" 2>/dev/null
   fi
 }
 
@@ -94,11 +103,13 @@ run_one() {
 # a run that said exactly what it did. Measured 2026-08-28, by doing it.
 probe_one() {
   if [ "$KVM" = 1 ]; then
+    # shellcheck disable=SC2086
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-      "$ENGINE" run --rm -i --device /dev/kvm "$IMAGE" sh -c "$COMMAND"
+      "$ENGINE" run --rm -i --device /dev/kvm $ENGINE_EXTRA "$IMAGE" sh -c "$COMMAND"
   else
+    # shellcheck disable=SC2086
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-      "$ENGINE" run --rm -i "$IMAGE" sh -c "$COMMAND"
+      "$ENGINE" run --rm -i $ENGINE_EXTRA "$IMAGE" sh -c "$COMMAND"
   fi
 }
 

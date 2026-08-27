@@ -29,6 +29,16 @@ if [ "$ACCEL" = "auto" ]; then
     ACCEL=kvm
   else
     ACCEL=tcg
+    # ⛔ SAY SO WHEN A DEVICE WAS HANDED IN AND CANNOT BE USED. Falling back
+    # silently is correct and it is not kind: on a free GitHub runner
+    # `--device /dev/kvm` gets the node into the container owned by a group the
+    # container is not in, everything works, and it is five hundred
+    # milliseconds slower for nothing. Measured 2026-08-28, after that silence
+    # cost this project a wrong conclusion about acceleration.
+    if [ -c /dev/kvm ]; then
+      printf 'netbsd: /dev/kvm is here and cannot be opened by this container, so it is not being used.\n' >&2
+      printf 'netbsd: a rootless engine usually needs the group as well as the node, for example --group-add keep-groups.\n' >&2
+    fi
   fi
 fi
 
