@@ -18,7 +18,7 @@ entries themselves. Do not add a "previous sessions" section.
 ```text
 session started 2026-08-27T12:54:52Z
 baseline        this repository became standalone in this session
-entries         total 2  open 1  blocked 0  done 1
+entries         total 19  open 18  blocked 0  done 1
 ```
 
 ⚠ The counts above are checked against [`INDEX.md`](INDEX.md)'s rows by
@@ -69,63 +69,101 @@ reference remains deliberately**, and it is pinned:
 
 ## ⭐ The work order
 
-**1. `BSD-01`, the only open entry, and the goal it was written around is met.**
-⛔ **What is left is its acceptance command, not its purpose.**
+⛔ **The largest defect in this project is invisible from the inside: it
+works, and nobody can use it.** A route to a BSD shell that needs nothing but a
+container engine is measured, and no published image does it.
 
-Its `Prove` clause names one command:
+⛔ **The second largest is that the project cannot justify itself.** Nothing
+here has compiled anything, so a developer with a cross toolchain has no
+evidence to switch on.
+
+Everything below is ordered by those two.
+
+### 1. ⛔ `IMG-01`, then `IMG-02`. The only P0s
+
+`IMG-01` is the promise in one command:
 
 ```bash
-podman -c freebsd run --rm IMAGE /bin/sh -c 'uname -sr'
+podman run --rm -it ghcr.io/pkgforge-dev/freebsd:latest sh
 ```
 
-⚠ **Everything underneath that command works.** A key installed over the serial
-console, the empty-password ssh door closed before any port is forwarded, the
-port bound to loopback, ssh authenticating from Windows, and
-`podman system connection add` returning 0.
+`IMG-02` is that promise being worth keeping: a real userland with a package
+manager, rather than the 20 MB rescue shell the measured route boots today.
 
-⛔ **What stops it is a guest fault.** `podman system service`, a long-running
-multithreaded Go daemon, panics the FreeBSD kernel in `_umtx_op`, which is what
-Go's scheduler parks threads on. The stack, the conditions and the withdrawn
-explanation are in [`bsd.md`](bsd.md).
+⛔ **In that order.** Shipping `IMG-02` first builds a development
+environment nobody can start.
 
-⭐ **So the next question is not a command, it is:** can a multithreaded Go
-daemon stay alive in a FreeBSD guest under the Windows hypervisor.
-[`bsd.md`](bsd.md) lists what is untried.
+### 2. ⛔ `PERF-02`, then `PERF-03`. The entries that can end this project
 
-**2. ⛔ Then read [`../docs/LIMITS.md`](../docs/LIMITS.md) and file from it.**
-That document is the honest account of what this project cannot do yet, and it
-is meant to shrink. ⚠ An entry filed from a measurement in it carries that
-measurement; an entry filed from an opinion is how a backlog stops meaning
-anything.
+Two users, one program, one matrix: a developer cross-compiling on Linux against
+a developer using this image, over a real C, C++, Go and Rust project.
+⛔ **The bar is 5 percent**, and failing it publishes the ratio rather than
+quietly dropping the bar.
+
+⚠ `PERF-01` is the smaller version of the same question and comes first
+only because it is cheaper.
+
+### 3. ⚠ `IMG-03`, `INF-04`, `INF-06`. The three that decide whether it is usable
+
+- `IMG-03`: ⛔ `-v`, `-p` and `-e` reach the container and stop there.
+- `INF-04`: ⛔ every route starts with a network fetch, so an air-gapped
+  consumer has nothing at all.
+- `INF-06`: ⛔ everything consumed here belongs to somebody else, and a
+  fetch that returns an error page must not be imported as a root filesystem.
+
+### 4. ⭐ `PORT-01` and `INF-05`. Turning one datapoint into a guarantee
+
+Every portability claim is inferred from one Windows laptop. `PORT-01` is one
+command per host; `INF-05` is the matrix that makes it a standing guarantee
+instead of a one-off.
+
+### 5. ⚠ `INF-07`, and it is partly done
+
+The consumer-facing pages have had one tightening pass. ⛔ They still carry
+narrative that belongs in [`../HISTORY/`](../HISTORY/README.md), and the entry
+stays open until a page can be read as a manual.
+
+### 6. The `OPT-*` entries, which are levers and not goals
+
+⛔ **Do not pull one before `PERF-02` says which is stuck.** Optimising a
+workload that was already fine is how a month is spent for nothing.
+
+### 7. ⚠ `BSD-01`, which was the headline and is not any more
+
+⭐ The container route overtook it: more hosts, less privilege, faster to a
+shell. It stays open because its acceptance command has not returned 0.
+
+⛔ **Its blocker is a guest fault, not a client one.** `podman system
+service`, a long-running multithreaded Go daemon, panics the FreeBSD kernel in
+`_umtx_op`, which is what a Go scheduler parks threads on. Everything underneath
+it works.
 
 ---
 
-## Open questions for the operator
+## ⭐ Open questions: none. Four were answered on 2026-08-27.
 
-⛔ These block work. Each carries a recommendation, so agreeing costs nothing.
+⛔ **They are settled and recorded in [`RULES.md`](RULES.md), which persists
+where this file is rewritten.** Restated here as pointers only, so the two
+cannot fork.
 
-### 1. ⭐ Should this repository publish something bootable?
+| the question | the ruling |
+| --- | --- |
+| what does the first published image ship, and what is it called | ⭐ **NetBSD, named `netbsd`.** Ship now rather than waiting for FreeBSD |
+| what is the performance baseline measured against | ⛔ **a free GitHub runner**, both users in the same job. Not a BSD host, not the developer's laptop |
+| what base does the container use | ⛔ **build towards `scratch`.** Alpine is a stepping stone. A consumer who cannot debug it opens an issue |
+| what if 5 percent cannot be met | ⛔ **keep optimising.** The entry does not close by repositioning the project |
 
-⭐ **Recommendation: yes, and the measurement now says so.** This repository
-publishes a root filesystem, and for three of its four BSDs nothing exists that
-can run one. ⛔ **A raw disk image with a stock kernel boots on an ordinary
-Windows host with no installer**, which is what this session measured. Two
-projects already distribute exactly that: `smolBSD` pushes a raw bootable disk
-to a registry through `oras`, and `acj` publishes a kernel and a root filesystem
-as release assets.
+⚠ **One constraint from those answers reaches every entry**, and it is the
+one most likely to be forgotten: ⛔ **there is no cloud VM and there never will
+be, and no BSD host exists.** A design that needs either is refused rather than
+scheduled. [`RULES.md`](RULES.md).
 
-⚠ **It is a shape decision with a retention policy attached**, which is why it
-is a question rather than a task.
+---
 
-### 2. ⚠ How many releases per BSD, and for how long?
+## ⚠ How much a session takes on
 
-Today it is one release per BSD, pinned in [`../scripts/sources`](../scripts/sources).
-**Recommendation: keep one until the bootable question above is answered**,
-because the answer changes what a release even is here.
-
-### 3. ⚠ Architectures beyond `amd64`?
-
-Today it is `amd64` only. ⛔ **The measured blocker is not the build**: FreeBSD
-publishes `aarch64` and `riscv64` already. It is that arm64 CI runners have no
-`/dev/kvm`, so nothing on them can boot what they build.
-**Recommendation: not yet**, and revisit when there is a runner that can.
+⭐ **As many entries as it can finish properly**, not one, and not one per
+`L` estimate. ⛔ The gate, the test suite and the mandatory reviews are what
+hold quality, so an agent that clears five entries has cleared five gated,
+reviewed entries. ⚠ Stop at roughly five, or when the operator interrupts.
+[`RULES.md`](RULES.md).

@@ -15,12 +15,12 @@ what to do.
 | row | before | after |
 | --- | --- | --- |
 | **Elapsed** | 2026-08-27T12:54:52Z | about 3 hours |
-| **Commits** | `878e286` | 3, ending in one squashed root commit |
-| **Work** | 1 assigned: reach a BSD userland from Windows, trying the ranked routes in order | ⭐ **the goal is reached.** ⚠ `BSD-01` stays open on its own acceptance command |
+| **Commits** | `878e286` | ⭐ **one squashed root commit**, then one more. `main` is protected, with admin bypass left on |
+| **Work** | 1 assigned: reach a BSD userland from Windows | ⭐ **reached, and then overtaken by a better route.** ⚠ `BSD-01` stays open on its own acceptance command, and is no longer the headline |
 | **Changes** | 6 tracked files | ⭐ **9 new experiments**, a shared console driver in **two** languages, and the whole of this repository's own tooling, conventions and record, vendored and adapted |
 | **Checks** | `sh tests/run.sh`, 27 passed | ⭐ same, plus a 12-check gate this repository now owns |
 | **Cost** | | no money. ⚠ about **1.0 GB downloaded**, and **7.4 GB of scratch left on disk**, all in ignored directories |
-| **Health** | not standalone | ⭐ **standalone.** One pinned reference remains, deliberately, and it is recorded |
+| **Health** | not standalone, 2 entries | ⭐ **standalone**, **19 entries**, 2 of them P0, every one filed from a measurement. Seven deep reviews, each naming what it did not look at |
 
 ---
 
@@ -39,6 +39,28 @@ On a **Windows** host, on the machine's **own hypervisor**, **unelevated**, with
 ⭐ **The exact command, the timings and the conditions are in
 [`../docs/LIMITS.md`](../docs/LIMITS.md).** They are not repeated here: one
 fact, one home.
+
+---
+
+## ⛔ The honest answer to "can I actually use this"
+
+⚠ **Read this before the findings.** The time-to-a-shell is the attractive
+half; this is the half that decides whether the project is worth continuing.
+
+| the question | the answer today |
+| --- | --- |
+| how does it work | ⭐ an emulator **inside** a Linux container, booting a BSD microvm, console wired to the container's stdio. No privilege, nothing kernel-level |
+| does it work on Linux, on CI | ⚠ **inferred, not measured.** One Windows laptop is the whole sample |
+| do my usual flags work | ⛔ **`-v`, `-p` and `-e` do NOT reach the guest.** It is a VM inside the container |
+| can I install a compiler and build a BSD binary | ⛔ **no.** It is NetBSD not FreeBSD, a 20 MB rescue userland, no package manager, nothing persists |
+| what does real work cost | ⛔ **unknown.** Nothing here has measured throughput of any kind |
+| would I switch from a cross toolchain | ⛔ **no evidence either way.** That is `PERF-02` and `PERF-03`, and the bar is 5 percent |
+| can I get it without a registry | ⛔ **not today.** Every route starts with a network fetch. `INF-04` |
+
+⭐ **All five are in [`../docs/LIMITS.md`](../docs/LIMITS.md) with the
+evidence, and all five now have an entry against them.** ⛔ Three of the
+answers are "no", and a project that hides those is a project that surprises
+somebody later.
 
 ---
 

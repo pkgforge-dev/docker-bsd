@@ -196,6 +196,40 @@ for f in experiments/lib/console.ps1 experiments/lib/console.py; do
   fi
 done
 
+# ⛔ THE INDEX AND THE ENTRY MUST AGREE ABOUT PRIORITY AND EFFORT.
+# check-record.sh already asserts the counts and the statuses agree. It does not
+# compare priority or effort, and those are what a maintainer sorts by: an entry
+# that says P2 in its own file and P0 in the index is an entry that gets picked
+# up in the wrong order.
+prio_bad=""
+for row in $(grep -oE '^\| [A-Z]+-[0-9]+ \| P[0-9] \| [SMLX]+ \|' TODO/INDEX.md \
+             | tr -d '|' | tr -s ' ' '_' | sed 's/^_//;s/_$//'); do
+  eid=$(printf '%s' "$row" | cut -d_ -f1)
+  pri=$(printf '%s' "$row" | cut -d_ -f2)
+  eff=$(printf '%s' "$row" | cut -d_ -f3)
+  # The entry's own declaration, wherever it lives.
+  # ⚠ -A6, not -A3. A Source line that wraps to two lines pushes the
+  # declaration further down, and a window too small reports "no declaration"
+  # for an entry that has one. ⛔ That is a false failure, which is the worst
+  # kind: a check that cries wolf gets widened until it stops checking.
+  decl=$(grep -h -A6 "^## ${eid}\." TODO/*.md 2>/dev/null \
+         | grep -oE '\*\*Priority\*\* P[0-9] · \*\*Effort\*\* [SMLX]+' | head -1)
+  [ -n "$decl" ] || { prio_bad="$prio_bad ${eid}(no-declaration)"; continue; }
+  case "$decl" in
+    *"Priority** $pri "*) : ;;
+    *) prio_bad="$prio_bad ${eid}(priority)" ;;
+  esac
+  case "$decl" in
+    *"Effort** $eff"*) : ;;
+    *) prio_bad="$prio_bad ${eid}(effort)" ;;
+  esac
+done
+if [ -z "$prio_bad" ]; then
+  ok "every entry's priority and effort match TODO/INDEX.md"
+else
+  bad "index and entry disagree:$prio_bad. reproduce: grep -A3 '^## <ID>\.' TODO/*.md"
+fi
+
 # ⛔ A COUNT CLAIMED IN PROSE MUST MATCH THE TREE. Three documents claimed three
 # different numbers of experiments once, because a ninth was added and the prose
 # was not. A number written in a sentence is a number that drifts.

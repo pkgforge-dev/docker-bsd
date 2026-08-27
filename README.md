@@ -23,16 +23,15 @@ podman run --rm ghcr.io/freebsd/freebsd-runtime:15.1 /bin/sh -c 'uname -a'
 
 Exit code **139**, which is 128 + 11, a **SIGSEGV**. No stdout.
 
-⭐ **That number is the whole story.** It is not `Exec format error`, which is
-what a wrong *architecture* gives and what `binfmt_misc` fixes. The Linux ELF
-loader **accepts** the FreeBSD binary and it dies on its first syscall, because
-the syscall ABI is a different operating system's. `qemu-user` does not help
-either: it emulates a foreign architecture presenting **Linux** syscalls.
+⭐ **Read the number, not the text.** 139 is not `Exec format error`. The
+loader **accepts** the binary and it dies on its first syscall, because the
+syscall ABI is a different operating system's. ⛔ So `binfmt_misc` and
+`qemu-user` do not help: they translate a foreign **architecture** presenting
+Linux syscalls.
 
-⭐ **Building and publishing these images needs no BSD kernel. Only running one
-does.** That is why this repository can be built by ordinary Linux CI runners,
-and why it makes no attempt to smoke-test the images it produces: a test that
-claimed to run them would be theatre.
+⭐ **Building these images needs no BSD kernel. Only running one does.**
+That is why ordinary Linux CI can build them, and why nothing here smoke-tests
+them: no runner can run one.
 
 ---
 

@@ -35,6 +35,11 @@ about; a review named after a person finds what that person would trip over.
 | --- | --- |
 | [`reviews/1-somebody-checking-whether-the-numbers-are-real.md`](reviews/1-somebody-checking-whether-the-numbers-are-real.md) | a reader who does not trust this repository and is hunting the sentence with no artefact behind it |
 | [`reviews/2-somebody-who-cloned-this-and-has-nothing-else.md`](reviews/2-somebody-who-cloned-this-and-has-nothing-else.md) | ⭐ a person or agent with this repository and **nothing else** |
+| [`reviews/3-a-maintainer-six-months-from-now.md`](reviews/3-a-maintainer-six-months-from-now.md) | somebody who has forgotten everything, opening the backlog to pick something up |
+| [`reviews/4-a-consumer-who-read-only-the-limits-page.md`](reviews/4-a-consumer-who-read-only-the-limits-page.md) | ⭐ somebody deciding whether to use this at all, asking whether it will waste their afternoon |
+| [`reviews/5-somebody-wiring-this-into-their-ci.md`](reviews/5-somebody-wiring-this-into-their-ci.md) | a platform engineer asking whether it is deterministic and whether it will still work unattended |
+| [`reviews/6-an-air-gapped-consumer.md`](reviews/6-an-air-gapped-consumer.md) | ⭐ somebody with no route to a registry, who can only carry files in |
+| [`reviews/7-does-this-project-deserve-to-exist.md`](reviews/7-does-this-project-deserve-to-exist.md) | ⛔ a skeptic who already has a cross toolchain and is asking why they would switch |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a

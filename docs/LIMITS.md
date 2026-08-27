@@ -19,7 +19,7 @@ host, on macOS, or on arm64.
 | --- | --- | --- | --- |
 | ⭐ **only podman or docker** | a **NetBSD** shell | ⭐ **2.6 s** | ⭐ **none** |
 | ⭐ the same, plus `--device /dev/kvm` | the same shell | ⭐ **0.6 s** | one device |
-| an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | 114 s | ⭐ none |
+| an emulator, and Windows | a **FreeBSD 15.1** userland, full GENERIC | ⚠ **114 to 118 s** | ⭐ none |
 | a Linux host or WSL2 machine with `/dev/kvm` | a **FreeBSD 15.1** userland | 1.8 s | write access to `/dev/kvm` |
 | a BSD host already | ⭐ `podman run` on the images this repository publishes | seconds | none |
 
@@ -76,15 +76,116 @@ shell.**
 
 - ⛔ **It is NetBSD, not FreeBSD.** The microvm that boots this fast is
   NetBSD's. FreeBSD has no equivalent published today.
-- ⛔ **It is a rescue userland.** It has `sysctl` and a shell; it does **not**
-  have `uname`, `tail`, or a package manager. ⚠ A first version of the
-  experiment asserted on `uname` and reported failure over a guest that was
-  answering correctly.
+- ⛔ **It is a rescue userland.** It has `sysctl` and a shell. It does **not**
+  have `uname`, `tail`, or a package manager.
 - ⚠ **Compute inside it is emulated**, so it is the wrong place to build
   anything. Reaching a shell is cheap because the work is small.
 - ⚠ **`podman run --rm -it ghcr.io/pkgforge-dev/freebsd:latest sh` does not do
   this yet.** ⛔ **This repository does not publish that image.** The route is
   measured; the packaging is not built. It is the highest-value open task.
+
+---
+
+## ⛔ 1a. The five questions a consumer actually asks about route 1
+
+⚠ **Answered here because the 2.6 seconds is the attractive half and these
+are the half that decides whether the project is useful.** Each answer says
+whether it is measured or inferred.
+
+### Q. How does it work? Is it an emulator inside a Linux container?
+
+⭐ **Yes, exactly that, and there is no trick beyond it.**
+
+```text
+your host (any OS with a container engine)
+  |
+  +-- an ordinary Linux container, unprivileged
+       |
+       +-- qemu-system-x86_64, an ordinary userspace process
+            |
+            +-- a NetBSD microvm kernel and root filesystem
+                 |
+                 +-- its serial console, wired to the container's stdio
+```
+
+⭐ **Nothing is kernel-level and nothing needs privilege.** The container
+does not need `binfmt_misc`, a device, a capability or root, because the guest
+is not being executed by the host kernel at all: it is being **interpreted** by
+a normal program that happens to live in the image.
+
+⛔ **What that means for `--platform`, `binfmt` and friends: they are
+irrelevant here.** They translate a foreign **architecture** presenting Linux
+syscalls. This is a foreign **operating system**, and route 1 sidesteps it by
+not asking the host kernel to run BSD code at all.
+
+### Q. Does it work everywhere? On Linux? On CI?
+
+⚠ **MEASURED ON EXACTLY ONE PATH**: a container running inside the WSL2
+Linux machine on one Windows host, with podman.
+
+| host | state |
+| --- | --- |
+| Windows, via a podman or docker machine | ⭐ **measured** |
+| native Linux | ⚠ **INFERRED, not measured.** The container is a Linux container either way, so a native host is the same code path with one layer removed. Nothing has run it |
+| GitHub CI, `x86_64` | ⚠ **inferred.** The unaccelerated path needs nothing a runner lacks. `/dev/kvm` on those runners is a sourced claim, not one measured here |
+| CI, arm64 | ⛔ **expected to fail as written.** The artefacts are `amd64`, and those runners have no `/dev/kvm`, so it would be emulating a foreign architecture as well as a foreign OS |
+| macOS | ⛔ **not attempted** |
+
+⛔ **So "it works everywhere" is not a claim this repository can make today.**
+It is a reasonable expectation with one datapoint under it.
+
+### Q. Do I really need no setup, and do my usual flags work?
+
+⭐ **For a shell: yes.** `podman run --rm -it IMAGE` and you are in a BSD
+shell. `-it` is not optional, because what you are being given is a console.
+
+⛔ **For anything else: no, and this is the biggest gap in route 1.**
+
+| the flag you know | what actually happens |
+| --- | --- |
+| `-v /host/path:/in/container` | ⛔ **reaches the CONTAINER, not the guest.** The BSD has its own root filesystem and cannot see the mount |
+| `-p 8080:80` | ⛔ **reaches the container.** Nothing forwards it into the guest |
+| `-e FOO=bar` | ⛔ the same. The guest does not inherit the container's environment |
+| `--device /dev/kvm` | ⭐ **works, and is the one that helps.** Worth about two seconds |
+| `--rm`, `-it`, `--name` | ⭐ work normally: they are about the container |
+
+⚠ **All three of the first row are solvable** with a shared filesystem and
+a port forward inside the emulator, and none of it is built. That is a filed
+task, not a law of nature.
+
+### Q. Is this better than a toy? Can I install Rust and build a FreeBSD binary?
+
+⛔ **No. Not with what is published today, and the honest answer is worth
+more than an encouraging one.**
+
+| why not | detail |
+| --- | --- |
+| ⛔ it is **NetBSD**, not FreeBSD | the microvm that boots in 2.6 s is NetBSD's. There is no equivalent published FreeBSD one |
+| ⛔ it is a **rescue** userland | about 20 MB. No package manager, no `uname`, no compiler, no `pkgin`. It is a shell and a kernel |
+| ⛔ there is **no persistence** | `--rm` and a read-only-shaped workflow; nothing carries a build out |
+| ⚠ compute is **emulated** without `/dev/kvm` | fine for reaching a prompt, wrong for a compile |
+
+⭐ **What would make it real**, and none of it is measured:
+
+1. a full BSD root filesystem in the microvm instead of a rescue one, with a
+   package manager;
+2. a shared filesystem, so a source tree on the host is visible in the guest;
+3. `/dev/kvm` when it is available, so the compile is virtualised and not
+   interpreted;
+4. ⛔ **a measured build**, of something real, with a number beside it.
+
+⚠ **Until 4 exists, treat route 1 as a demonstration that the shape works,
+not as a development environment.** That is what it is.
+
+### Q. What does it cost when it IS doing real work?
+
+⛔ **UNKNOWN. Nothing in this repository has measured throughput of any kind.**
+
+⚠ The only adjacent number is a warning rather than a guide: a stock
+general-purpose FreeBSD kernel on the Windows hypervisor spends **108 seconds**
+probing devices before it mounts a root filesystem, **accelerated**. That says
+IO through that path is expensive; it does not say what a compile costs, and
+extrapolating from it would be inventing a number.
 
 ---
 
@@ -98,12 +199,17 @@ hypervisor, unelevated.**
 | 1 | install an emulator. `scoop install qemu`, or the QEMU installer | ⚠ 197 MB |
 | 2 | ⭐ **check the hypervisor is reachable.** One unelevated call, in [`environment.md`](environment.md) | seconds |
 | 3 | `sh experiments/21-fetch-freebsd-ci.sh` | ⚠ 666 MB, expands to 6.03 GB |
-| 4 | `pwsh -NoProfile -File experiments/33-boot-freebsd-whpx.ps1` | ⭐ **114 s to a login prompt** |
+| 4 | `pwsh -NoProfile -File experiments/33-boot-freebsd-whpx.ps1` | ⚠ **114 to 118 s to a login prompt** |
 
 ⛔ **WSL is not required. Podman is not required. Administrator is not
 required.**
 
-### ⚠ Where the 114 seconds go, measured
+### ⚠ Where the time goes, measured
+
+⛔ **Three boots, not one: 113.6 s, 117.4 s and 117.7 s.** The table below is
+the phase breakdown of the fastest of them, and the range is quoted above
+rather than the best number, because quoting the best one is how a benchmark
+becomes a claim.
 
 | phase | at | this phase |
 | --- | --- | --- |
@@ -113,18 +219,18 @@ required.**
 | `rc` starts | 112.8 s | 0.3 s |
 | a login prompt | 113.6 s | 0.8 s |
 
-⛔ **108 of the 114 seconds are device probing**, between the kernel banner and
-mounting root. ⚠ Not the loader, not `rc`, not the filesystem, and not the
-network: removing the network device entirely moved the total by under four
-seconds. ⭐ **That is the single biggest addressable cost in this project.**
+⛔ **108 of those seconds are device probing**, between the kernel banner and
+mounting root. ⚠ Not the loader, not `rc`, not the filesystem and not the
+network: removing the network device moved the total by under four seconds.
+⭐ **It is the single biggest addressable cost on this route.**
 
 ### ⛔ Two settings that are not optional on this route
 
-- ⛔ **Never `-cpu host` and never `-cpu max`** under this hypervisor, and never
-  a named model newer than the host. ⚠ On this machine none of them wedged the
-  emulator, against published reports; the safe choice costs nothing and the
-  failure it avoids is a long hang with no output. [`traps.md`](traps.md) row 6.
-- ⛔ **Pass `-nic none` if you mean no network.** [`traps.md`](traps.md) row 3.
+- ⛔ **Use a named CPU model no newer than the host.** Not `host`, not `max`.
+  ⚠ Published reports say those wedge the emulator; they did not here, and
+  the safe choice costs nothing. [`traps.md`](traps.md) row 6.
+- ⛔ **Pass `-nic none` if you mean no network.** The emulator attaches one
+  otherwise. [`traps.md`](traps.md) row 3.
 
 ---
 
@@ -177,11 +283,12 @@ parks threads on.
 everything underneath it does: the key, the closed password door, the forwarded
 loopback port, the authenticated ssh, and the connection.
 
-⛔ **And one explanation was published and withdrawn.** Selecting a different
-guest timecounter moves a short-lived Go program from failing to working, which
-looked like the cause. It is not: with that timecounter the clock is measurably
-correct and the daemon still takes the kernel down.
-[`../TODO/bsd.md`](../TODO/bsd.md) carries the correction under the claim.
+⚠ **A workaround exists for short-lived Go programs and not for the
+daemon**: selecting a different guest timecounter moves `podman run` to `rc=0`.
+⛔ **It is not a fix and the cause is not known.** With that timecounter the
+clock is measurably correct and the daemon still takes the kernel down.
+[`../HISTORY/README.md`](../HISTORY/README.md) records what was believed and
+withdrawn.
 
 ---
 

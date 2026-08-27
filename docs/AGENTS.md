@@ -67,7 +67,7 @@ front of you and read what it names, in full.
 | **Anything involving a credential** | [`security/secrets.md`](security/secrets.md) | ⛔ a secret never enters the tree, a log, a commit message or a handoff |
 | **Writing or editing a document** | [`conventions/prose.md`](conventions/prose.md) · [`conventions/docs.md`](conventions/docs.md) | one fact, one home |
 | **Committing** | [`conventions/git.md`](conventions/git.md) | ⛔ no tool is credited, ever |
-| **Closing out a session** | [`methodology/sessions.md`](methodology/sessions.md) · [`methodology/reviews.md`](methodology/reviews.md) | ⛔ **two deep reviews minimum**, then rewrite `PROGRESS.md` and reconcile `INDEX.md` |
+| **Closing out a session, or being interrupted** | [`../TODO/RULES.md`](../TODO/RULES.md) end protocol · [`methodology/reviews.md`](methodology/reviews.md) | ⛔ **the same six steps either way.** Finish what cannot pause, checkpoint, two reviews, gates, push, print a resume prompt |
 | **Wondering why something is the way it is** | [`../HISTORY/`](../HISTORY/) | every past mistake is there, in its original wording |
 
 ⛔ **Read what the row names in full.** Not grepped, not skimmed, not recalled
