@@ -112,7 +112,10 @@ fact, one home.
 
 ## ⚠ What was NOT measured, so it is not claimed
 
-- ⛔ **Throughput of any kind.** Only time to an answer. `PERF-01` onwards.
+- ⛔ **Throughput inside the guest.** ⚠ **Half of it is measured**: the Linux
+  side of the compile comparison is 27 seconds for `cc -O2 -c sqlite3.c`. The
+  guest side needs the image whose build was still running when this session
+  ended, and a ratio with one side is not a ratio.
 - ⛔ **Whether acceleration helps or hurts on a runner.** Withdrawn, see finding 1.
 - ⚠ **Any host other than one Windows laptop and one GitHub runner.**
 - ⛔ **arm64 or macOS.** Not attempted. All artefacts are amd64.

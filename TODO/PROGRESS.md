@@ -102,11 +102,35 @@ are in [`../docs/LIMITS.md`](../docs/LIMITS.md):
   not finish at all in fifteen minutes. ⭐ Nothing in a benchmark should touch
   it.
 
-### 2. ⛔ `IMG-02`, which is close and is not closed
+### 2. ⛔ `IMG-02`, which is close, is not closed, and has one thing in flight
 
-The userland is real, the package manager works, and the compiler is in the
-image. ⛔ **What is missing is the number.** The entry requires a recorded build
-time, and that is `PERF-01`.
+The userland is real and the package manager works: it was watched fetching
+from its repository, and it was watched filling a 201 MB filesystem with a
+490 MB compiler, which is why the root is grown now.
+
+⛔ **What is in flight, so the next session does not rediscover it:** the build
+that installs the compiler into the guest had run for over forty minutes of
+emulated CPU when this session ended, both locally and on a runner. ⚠ It is not
+stuck: the emulator is at 100 percent the whole time. `INF-09` owns finding out
+why, and ⛔ **that job may be red on `main`**. The rescue variant and the
+published image are unaffected: the matrix is not fail-fast and each variant is
+its own job.
+
+⭐ **What to do first with it.** Do not start by fixing the build. Run the three
+measurements `INF-09` asks for, because a fix chosen before them is the fourth
+guess after three dead ones.
+
+### 2a. ⭐ `PERF-01`, and half of it is already measured
+
+⛔ **The Linux side of the comparison is done: 27 seconds**, three runs, for
+`cc -O2 -c sqlite3.c` in a container on the laptop, Alpine's GCC 14.2.
+[`../scripts/bench-compile`](../scripts/bench-compile) runs both sides and
+[`../docs/LIMITS.md`](../docs/LIMITS.md) is where the pair belongs when there is
+a pair.
+
+⚠ **The guest side needs the image above.** Everything else for it exists: the
+source is inside the guest, the same bytes are inside the container, and both
+sides time themselves from the inside.
 
 ### 3. ⚠ `IMG-03`, `INF-04`, `INF-06`. The three that decide whether it is usable
 
