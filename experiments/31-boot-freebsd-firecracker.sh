@@ -104,8 +104,14 @@ ip addr add "$TAP_IP/24" dev "$TAP_DEV" || fail "could not address tap device"
 ip link set dev "$TAP_DEV" up || fail "could not bring tap device up"
 say "  $TAP_DEV at $TAP_IP/24, guest expected at $GUEST_IP"
 
-# shellcheck disable=SC2329  # reached through the trap two lines below,
-# which shellcheck cannot see.
+# ⛔ BOTH CODES, and the reason is a real CI failure. This function is reached
+# only through the `trap` two lines below, which the linter cannot see. The
+# local linter reports SC2329 for that; the CI runner's version reports SC2317
+# for the same thing, so a directive naming only one passed here and failed
+# there. Measured 2026-08-27.
+# ⚠ And do not begin a comment line with that tool's own name: it is parsed as
+# a directive, which is how the first attempt at this comment broke the file.
+# shellcheck disable=SC2329,SC2317
 cleanup() {
   rc=$?
   say "cleanup"

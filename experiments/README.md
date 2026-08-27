@@ -123,6 +123,12 @@ gated.** That move is the signal that a question stopped being a question.
 `.ps1` clean under `PSScriptAnalyzer -Severity Error,Warning`. Not gated, and
 not an excuse.
 
+⛔ **AND THE LINTER ON CI IS NOT THE ONE ON YOUR MACHINE.** A function reached
+only through a `trap` is reported as unreachable by both, under **different
+codes** depending on version. A suppression naming one code passes locally and
+fails on the runner. ⭐ Name every code that applies, and remember that a
+comment line beginning with the tool's own name is parsed as a directive.
+
 ---
 
 ## What is here, and what each one answered
