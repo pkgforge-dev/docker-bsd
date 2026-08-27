@@ -14,16 +14,16 @@ between the two. It runs as a gate.
 ## Counts
 
 ```text
-total 19  open 18  blocked 0  done 1
+total 20  open 19  blocked 0  done 1
 ```
 
 | priority | open | blocked | done | total |
 | --- | --- | --- | --- | --- |
 | P0 | 2 | 0 | 0 | 2 |
-| P1 | 10 | 0 | 0 | 10 |
+| P1 | 11 | 0 | 0 | 11 |
 | P2 | 6 | 0 | 0 | 6 |
 | P3 | 0 | 0 | 1 | 1 |
-| **all** | **18** | **0** | **1** | **19** |
+| **all** | **19** | **0** | **1** | **20** |
 
 ---
 
@@ -43,6 +43,7 @@ total 19  open 18  blocked 0  done 1
 | INF-05 | P1 | L | open | CI that tests the permutations, and publishes only when all pass | [`infrastructure.md`](infrastructure.md) |
 | INF-06 | P1 | M | open | Survive an upstream changing its mind | [`infrastructure.md`](infrastructure.md) |
 | INF-07 | P1 | M | open | The consumer-facing documents read like a manual | [`infrastructure.md`](infrastructure.md) |
+| INF-08 | P1 | S | open | The shared console driver returns the right answer late | [`infrastructure.md`](infrastructure.md) |
 | OPT-01 | P2 | M | open | The allocator, because the default one is slow | [`performance.md`](performance.md) |
 | OPT-02 | P2 | L | open | An emulator image built to do one thing | [`performance.md`](performance.md) |
 | OPT-03 | P2 | L | open | Is a virtual machine even the right shape | [`performance.md`](performance.md) |

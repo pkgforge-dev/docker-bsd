@@ -30,12 +30,33 @@
 # enough to prove it. FreeBSD publishes aarch64 and riscv64 as well; the others
 # vary. Adding an architecture means checking it exists first, per BSD.
 #
+# ⭐ IT ALSO PINS THE RUNNABLE IMAGE'S ARTEFACTS, and that is a second kind of
+# fact rather than a fifth BSD. The four ids above are USERLANDS: a tar that
+# becomes an image nobody can run without a BSD kernel. The runtime ids below
+# are what makes one image BOOT: a guest kernel and a guest root filesystem
+# that an emulator inside the image starts.
+#
+# ⛔ THEY ARE PINNED BY SHA-256 AND THE FOUR ABOVE ARE NOT. That asymmetry is
+# deliberate and it is about what the URL points at. An upstream release
+# directory names its version, so the URL is the pin. Both runtime artefacts
+# live behind a MOVING pointer: one is an unversioned asset path and the other
+# is a release literally tagged `latest`. A build that took either without a
+# digest would produce a different image every week and call it the same one.
+#
+# ⚠ THE CONSEQUENCE, STATED SO NOBODY IS SURPRISED: when upstream rotates one
+# of those pointers the image build FAILS. That is the intended behaviour. The
+# fix is to re-pin here, in one edit, after looking at what changed.
+#
 # Usage:
 #   sh scripts/sources --list                every id
 #   sh scripts/sources --method ID           oci | sets | iso
 #   sh scripts/sources --version ID
 #   sh scripts/sources --urls ID             one URL per line
 #   sh scripts/sources --json                a GitHub Actions matrix
+#   sh scripts/sources --runtime-list        every runtime artefact id
+#   sh scripts/sources --runtime-url ID
+#   sh scripts/sources --runtime-sha256 ID
+#   sh scripts/sources --runtime-base        the base image, by digest
 #
 # Exit codes: 0 ok, 2 unknown id or argument.
 
@@ -61,7 +82,48 @@ DRAGONFLY_BASE="https://mirror-master.dragonflybsd.org/iso-images"
 # going to fail fails on the 559 KB one rather than the 215 MB one.
 FREEBSD_VARIANTS="static dynamic runtime notoolchain toolchain"
 
+# ── the runnable image's artefacts ─────────────────────────────────────────
+#
+# ⛔ THE BASE IS A DIGEST AND THE TAG BESIDE IT IS A COMMENT. The name is
+# written so a reader can see which release the digest belongs to; only the
+# digest is what a build resolves. alpine:3.22, read on 2026-08-27.
+#
+# ⚠ EVERY NAME BELOW CARRIES `PINNED` ON PURPOSE, and it is not decoration.
+# check-no-secrets.sh flags any long hex string, because that is what a leaked
+# credential looks like, and it excludes exactly the hex that is ASSIGNED TO A
+# NAME DECLARING ITSELF A PIN. ⛔ Renaming one of these to something shorter
+# re-arms that check against a value that is public by construction, and the
+# fix then looks like widening a security rule. It is not.
+RUNTIME_BASE_IMAGE="docker.io/library/alpine"
+RUNTIME_BASE_PINNED_SHA256="14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+
+# ⚠ smolBSD publishes the kernel at an unversioned path and the root filesystem
+# under a release tagged `latest`. Both move. The digests below were taken on
+# 2026-08-27 and they are the pin.
+SMOL_KERNEL_URL="https://smolbsd.org/assets/netbsd-SMOL"
+SMOL_KERNEL_PINNED_SHA256="63935f0c30ea304b4fb61b942f6f93c0b29a77b913f94b6f2ec7ebd31570a914"
+SMOL_ROOTFS_URL="https://github.com/NetBSDfr/smolBSD/releases/download/latest/rescue-amd64.img.xz"
+SMOL_ROOTFS_PINNED_SHA256="2a5f3ccc4e0266bcbdb3404d55a803533cedba1c0b8c8cac20f52d1419456ea2"
+
 ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
+
+runtime_ids() { printf 'kernel\nrootfs\n'; }
+
+runtime_url() {
+  case "$1" in
+    kernel) printf '%s\n' "$SMOL_KERNEL_URL" ;;
+    rootfs) printf '%s\n' "$SMOL_ROOTFS_URL" ;;
+    *) printf 'sources: unknown runtime id: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
+
+runtime_sha256() {
+  case "$1" in
+    kernel) printf '%s\n' "$SMOL_KERNEL_PINNED_SHA256" ;;
+    rootfs) printf '%s\n' "$SMOL_ROOTFS_PINNED_SHA256" ;;
+    *) printf 'sources: unknown runtime id: %s\n' "$1" >&2; exit 2 ;;
+  esac
+}
 
 method() {
   case "$1" in
@@ -121,6 +183,10 @@ case "${1:-}" in
   --version) shift; version "${1:-}" ;;
   --urls)    shift; urls "${1:-}" ;;
   --json)    json ;;
+  --runtime-list)   runtime_ids ;;
+  --runtime-url)    shift; runtime_url "${1:-}" ;;
+  --runtime-sha256) shift; runtime_sha256 "${1:-}" ;;
+  --runtime-base)   printf '%s@sha256:%s\n' "$RUNTIME_BASE_IMAGE" "$RUNTIME_BASE_PINNED_SHA256" ;;
   -h|--help) awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0" ;;
-  *) printf 'sources: expected --list --arch --variants --method --version --urls or --json\n' >&2; exit 2 ;;
+  *) printf 'sources: expected --list --arch --variants --method --version --urls --json --runtime-list --runtime-url --runtime-sha256 or --runtime-base\n' >&2; exit 2 ;;
 esac

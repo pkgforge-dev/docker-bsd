@@ -1,0 +1,131 @@
+#!/bin/sh
+# build-netbsd - build the image that BOOTS a BSD, and prove it did.
+#
+# ⛔ THIS IS NOT build-bsd. That script imports a userland into an image nobody
+# can run without a BSD kernel. This one builds the image IMG-01 is about: a
+# Linux container carrying an emulator, a guest kernel and a guest root
+# filesystem, which reaches a NetBSD shell on any host with a container engine.
+#
+# ⛔ EVERY PIN COMES FROM scripts/sources AND NONE IS WRITTEN HERE. A digest in
+# two files is a digest that will disagree with itself.
+#
+# ⛔ --test IS AN ASSERTION, NOT A LOOK AT THE OUTPUT. It runs the acceptance
+# command from TODO/images.md, reads that process's exit code unpiped, and
+# checks the guest named a BSD. An image that builds and does not boot is the
+# whole failure this entry exists to prevent.
+#
+# Usage:
+#   sh scripts/build-netbsd                      build, tag localhost/netbsd
+#   sh scripts/build-netbsd --test               build, then prove it boots
+#   sh scripts/build-netbsd --test-only          prove an already-built image
+#   sh scripts/build-netbsd --registry R --push  build and publish
+#   sh scripts/build-netbsd --tag T              tag other than latest
+#
+# Exit codes: 0 ok, 1 the build or the proof failed, 2 a prerequisite is
+# missing.
+#
+# ⛔ Read the exit code from this process, unpiped.
+
+set -eu
+
+REGISTRY="${REGISTRY:-localhost}"
+TAG="${TAG:-latest}"
+DO_TEST=0
+BUILD=1
+PUSH=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --registry) shift; REGISTRY="${1:-}" ;;
+    --tag)      shift; TAG="${1:-}" ;;
+    --test)     DO_TEST=1 ;;
+    --test-only) DO_TEST=1; BUILD=0 ;;
+    --push)     PUSH=1 ;;
+    -h|--help)  awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"; exit 0 ;;
+    *) printf 'build-netbsd: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT" || { printf 'build-netbsd: cannot enter %s\n' "$ROOT" >&2; exit 2; }
+
+# ⚠ ENGINE is honoured from the environment before it is detected. A caller
+# that has already logged one engine in to a registry must get that same one
+# back: podman and docker do not share an image store, so a build under one and
+# a push under the other pushes nothing and says it worked.
+ENGINE="${ENGINE:-}"
+if [ -z "$ENGINE" ]; then
+  for e in podman docker; do
+    if command -v "$e" >/dev/null 2>&1; then ENGINE=$e; break; fi
+  done
+fi
+[ -n "$ENGINE" ] || { printf 'build-netbsd: neither podman nor docker is on PATH\n' >&2; exit 2; }
+command -v "$ENGINE" >/dev/null 2>&1 || {
+  printf 'build-netbsd: ENGINE=%s is not on PATH\n' "$ENGINE" >&2; exit 2; }
+
+IMAGE="$REGISTRY/netbsd:$TAG"
+
+BASE=$(sh scripts/sources --runtime-base)
+KERNEL_URL=$(sh scripts/sources --runtime-url kernel)
+KERNEL_SHA=$(sh scripts/sources --runtime-sha256 kernel)
+ROOTFS_URL=$(sh scripts/sources --runtime-url rootfs)
+ROOTFS_SHA=$(sh scripts/sources --runtime-sha256 rootfs)
+REVISION=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+
+printf 'build-netbsd\n'
+printf '  engine    %s\n' "$ENGINE"
+printf '  image     %s\n' "$IMAGE"
+printf '  base      %s\n' "$BASE"
+printf '  revision  %s\n' "$REVISION"
+
+if [ "$BUILD" = 1 ]; then
+  # ⛔ The context is the repository root on purpose. The Containerfile copies
+  # experiments/lib/console.py, which has one copy in this tree, and
+  # .containerignore is what keeps the downloads out of the context.
+  "$ENGINE" build \
+    -f images/netbsd/Containerfile \
+    -t "$IMAGE" \
+    --build-arg "BASE=$BASE" \
+    --build-arg "KERNEL_URL=$KERNEL_URL" \
+    --build-arg "KERNEL_SHA256=$KERNEL_SHA" \
+    --build-arg "ROOTFS_URL=$ROOTFS_URL" \
+    --build-arg "ROOTFS_SHA256=$ROOTFS_SHA" \
+    --build-arg "SOURCE_COMMIT=$REVISION" \
+    .
+fi
+
+if [ "$DO_TEST" = 1 ]; then
+  printf '\nthe acceptance command from TODO/images.md\n'
+  printf '  $ %s run --rm -i %s sh -c %s\n' "$ENGINE" "$IMAGE" "'sysctl -n kern.ostype'"
+
+  # ⛔ THE EXIT CODE IS THE RUN'S OWN, AND THE GUARD RUNS. A command
+  # substitution passes its child's status through, so this is the container's
+  # status and not a pipeline's. ⚠ The `|| rc=$?` is not decoration: under
+  # `set -e` a bare `cmd; rc=$?` never reaches the assignment, because the
+  # shell has already exited. That shape shipped in this repository once.
+  rc=0
+  out=$(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+        "$ENGINE" run --rm -i "$IMAGE" sh -c 'sysctl -n kern.ostype' 2>/dev/null) || rc=$?
+
+  printf '  exit      %s\n' "$rc"
+  printf '  stdout    %s\n' "$out"
+
+  if [ "$rc" != 0 ]; then
+    printf 'FAIL: the image did not reach a BSD shell (exit %s)\n' "$rc" >&2
+    exit 1
+  fi
+  case "$out" in
+    *BSD*) printf '  ⭐ a BSD answered\n' ;;
+    *) printf 'FAIL: exit 0 and the guest did not name a BSD: %s\n' "$out" >&2; exit 1 ;;
+  esac
+fi
+
+if [ "$PUSH" = 1 ]; then
+  [ "$REGISTRY" != "localhost" ] || {
+    printf 'build-netbsd: --push needs --registry\n' >&2; exit 2; }
+  "$ENGINE" push "$IMAGE"
+  printf '  pushed    %s\n' "$IMAGE"
+fi
+
+exit 0

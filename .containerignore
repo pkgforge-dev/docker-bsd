@@ -1,0 +1,14 @@
+# What the image build must not carry into its context.
+#
+# ⚠ The build context is the REPOSITORY ROOT, because the Containerfile copies
+# experiments/lib/console.py and there is one copy of that file. Without this
+# list the context also carries every downloaded artefact in .tmp and .work,
+# which on this machine was several gigabytes.
+.git/
+.tmp/
+.work/
+HISTORY/
+TODO/
+docs/
+examples/
+tests/

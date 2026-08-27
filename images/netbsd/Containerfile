@@ -1,0 +1,90 @@
+# The image IMG-01 publishes: a container that BOOTS a BSD.
+#
+# ⛔ IT FETCHES NOTHING AT RUN TIME. The emulator, the guest kernel and the
+# guest root filesystem are all in layers, so a consumer with no network and no
+# emulator installed still reaches a BSD shell. The experiment this came from
+# downloaded all three at run time from a bind mount, which is what made it an
+# experiment and what would have made this a liability.
+#
+# ⛔ EVERY ARTEFACT IS PINNED. The base by its manifest digest, the two guest
+# artefacts by SHA-256, and scripts/sources is the one place any of those
+# values is written. A build with no --build-arg fails at the FROM line rather
+# than silently taking a moving tag.
+#
+# ⚠ ONE THING IS NOT PINNED AND IT IS LABELLED RATHER THAN HIDDEN: the emulator
+# comes from Alpine's package repository, which is a branch and not a snapshot.
+# There is no snapshot service to pin to. The resolved version is written into
+# /opt/bsd/evidence.txt in the image, so a build that behaves differently from
+# another can be told apart afterwards.
+
+ARG BASE
+
+# ── fetch and verify, in a stage that does not ship ─────────────────────────
+FROM ${BASE} AS fetch
+
+ARG KERNEL_URL
+ARG KERNEL_SHA256
+ARG ROOTFS_URL
+ARG ROOTFS_SHA256
+
+RUN apk add --no-cache curl xz
+
+WORKDIR /art
+
+# ⛔ THE DIGEST IS CHECKED BEFORE THE FILE IS USED, AND THERE IS NO WAY PAST IT.
+# sha256sum -c is the last command in each pipeline, so the exit code the shell
+# reads is its own. An upstream that rotates a release under a moving tag fails
+# this build loudly, which is the intended behaviour and not a defect.
+RUN curl -fsSL -o netbsd-SMOL "$KERNEL_URL" \
+ && echo "$KERNEL_SHA256  netbsd-SMOL" | sha256sum -c -
+
+RUN curl -fsSL -o rescue-amd64.img.xz "$ROOTFS_URL" \
+ && echo "$ROOTFS_SHA256  rescue-amd64.img.xz" | sha256sum -c - \
+ && xz -d rescue-amd64.img.xz
+
+# ── what ships ──────────────────────────────────────────────────────────────
+FROM ${BASE}
+
+ARG KERNEL_URL
+ARG KERNEL_SHA256
+ARG ROOTFS_URL
+ARG ROOTFS_SHA256
+ARG SOURCE_COMMIT=unknown
+
+LABEL org.opencontainers.image.title="netbsd" \
+      org.opencontainers.image.description="A NetBSD shell in one podman run, on any host with a container engine and nothing else." \
+      org.opencontainers.image.source="https://github.com/pkgforge-dev/docker-bsd" \
+      org.opencontainers.image.licenses="0BSD" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}"
+
+RUN apk add --no-cache qemu-system-x86_64 python3
+
+COPY --from=fetch /art/netbsd-SMOL /guest/netbsd-SMOL
+COPY --from=fetch /art/rescue-amd64.img /guest/rescue-amd64.img
+
+# ⛔ console.py IS COPIED FROM experiments/lib, NOT DUPLICATED HERE. It is this
+# repository's single copy of two measured tty rules: type one character at a
+# time, and compare an echo with whitespace removed. A second copy is a second
+# place for one of them to be lost.
+COPY experiments/lib/console.py /opt/bsd/console.py
+COPY images/netbsd/guest.py /opt/bsd/guest.py
+COPY images/netbsd/entrypoint.sh /opt/bsd/entrypoint.sh
+
+RUN chmod +x /opt/bsd/entrypoint.sh \
+ && { \
+      echo "image      netbsd"; \
+      echo "revision   ${SOURCE_COMMIT}"; \
+      echo "kernel     ${KERNEL_URL}"; \
+      echo "kernel     sha256:${KERNEL_SHA256}"; \
+      echo "rootfs     ${ROOTFS_URL}"; \
+      echo "rootfs     sha256:${ROOTFS_SHA256}"; \
+      echo "emulator   $(qemu-system-x86_64 --version | head -n 1)"; \
+      echo "python     $(python3 --version)"; \
+      echo "alpine     $(cat /etc/alpine-release)"; \
+    } > /opt/bsd/evidence.txt
+
+# ⚠ -it is the only flag a consumer needs, and it is needed because what they
+# are being handed is a console. CMD is a bare shell name because that is what
+# a person types, and guest.py reads it as "give me the console".
+ENTRYPOINT ["/opt/bsd/entrypoint.sh"]
+CMD ["sh"]

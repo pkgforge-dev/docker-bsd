@@ -1,0 +1,150 @@
+# Build the image that BOOTS a BSD, prove it boots, and publish it.
+#
+# ⭐ THE PROOF IS THE POINT AND IT RUNS HERE. ci.yml says a runner has no BSD
+# kernel and refuses to pretend otherwise, and that is still true: this job
+# does not run a BSD image on the runner's kernel. It runs a LINUX image which
+# happens to contain an emulator, and the BSD inside it is a guest. That is why
+# this is the one workflow in this repository that can assert on a BSD.
+#
+# ⛔ THREE ASSERTIONS, AND THE SECOND IS THERE BECAUSE THE FIRST ONE ALONE IS
+# THEATRE:
+#
+#   1. the guest answers, and names a BSD;
+#   2. ⭐ A COMMAND THAT FAILS IN THE GUEST MAKES THE CONTAINER FAIL. A guard
+#      never seen to fail is a guard nobody has tested, so this run plants the
+#      defect: it asks the guest to exit 3 and requires exactly 3 back. Without
+#      it, an entrypoint that always exited 0 would pass assertion 1 forever;
+#   3. it needs no network at run time, which is what "baked into layers"
+#      means and the difference between this and the experiment it came from.
+#
+# ⛔ Third-party actions are pinned to a COMMIT, not a tag.
+
+name: image-netbsd
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - images/netbsd/**
+      - experiments/lib/console.py
+      - scripts/build-netbsd
+      - scripts/sources
+      - .github/workflows/image-netbsd.yml
+  pull_request:
+    paths:
+      - images/netbsd/**
+      - experiments/lib/console.py
+      - scripts/build-netbsd
+      - scripts/sources
+      - .github/workflows/image-netbsd.yml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to ghcr.io as well as building and proving
+        type: boolean
+        default: false
+  schedule:
+    # ⚠ Weekly. Both guest artefacts sit behind moving pointers, so this is
+    # also the alarm for one of them being rotated: the digest check fails the
+    # build rather than shipping a different guest under the same tag.
+    - cron: "0 5 * * 1"
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-netbsd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  netbsd:
+    name: build it, prove it boots, publish it
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ⚠ Which engine, decided once and used for every step. podman and docker
+      # do not share an image store, so a build under one and a push under the
+      # other pushes nothing and reports success.
+      - name: The engine, and what this runner actually offers
+        run: |
+          if command -v podman >/dev/null 2>&1; then echo "ENGINE=podman" >> "$GITHUB_ENV"
+          else echo "ENGINE=docker" >> "$GITHUB_ENV"; fi
+          echo "runner: $(uname -srm)"
+          echo "nproc:  $(nproc)"
+          if [ -c /dev/kvm ]; then
+            echo "kvm:    present, $(ls -l /dev/kvm)"
+          else
+            echo "kvm:    ABSENT on this runner"
+          fi
+
+      - name: Build
+        run: sh scripts/build-netbsd --tag ci
+
+      # ── assertion 1: it boots, unaccelerated, with no device handed in ─────
+      #
+      # ⛔ NOTE WHAT IS NOT PASSED. No --privileged, no --cap-add, no --device.
+      # This is the claim the whole entry rests on, so the run that proves it
+      # must not quietly be given anything.
+      - name: A BSD answers, with no privilege and no device
+        run: sh scripts/build-netbsd --tag ci --test-only
+
+      # ── assertion 2: the guard is seen to fail ────────────────────────────
+      - name: A command that fails in the guest fails the container
+        run: |
+          rc=0
+          "$ENGINE" run --rm -i localhost/netbsd:ci sh -c 'exit 3' >/dev/null 2>&1 || rc=$?
+          echo "the guest was asked to exit 3 and the container exited $rc"
+          if [ "$rc" != "3" ]; then
+            echo "FAIL: the guest's exit status does not reach the caller"
+            exit 1
+          fi
+
+      # ── assertion 3: nothing is fetched at run time ───────────────────────
+      - name: It boots with no network at all
+        run: |
+          rc=0
+          out=$("$ENGINE" run --rm -i --network none localhost/netbsd:ci \
+                sh -c 'sysctl -n kern.osrelease' 2>/dev/null) || rc=$?
+          echo "exit $rc, stdout: $out"
+          if [ "$rc" != "0" ] || [ -z "$out" ]; then
+            echo "FAIL: the image needs a network at run time"
+            exit 1
+          fi
+
+      - name: What is in it, and what it cost
+        run: |
+          "$ENGINE" run --rm -i --entrypoint cat localhost/netbsd:ci /opt/bsd/evidence.txt
+          "$ENGINE" image inspect localhost/netbsd:ci --format '{{.Size}}' \
+            | awk '{ printf "image size: %.0f MB\n", $1/1000000 }'
+
+      # ── publish ───────────────────────────────────────────────────────────
+      #
+      # ⛔ Only on an explicit dispatch that asked for it. A push to main
+      # builds and proves; it does not publish, because a green build is not
+      # the same decision as a release.
+      - name: Log in to ghcr.io
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | "$ENGINE" login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        run: |
+          reg="ghcr.io/${{ github.repository_owner }}"
+          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:latest"
+          "$ENGINE" tag localhost/netbsd:ci "$reg/netbsd:${GITHUB_SHA::12}"
+          "$ENGINE" push "$reg/netbsd:latest"
+          "$ENGINE" push "$reg/netbsd:${GITHUB_SHA::12}"
+          echo "published $reg/netbsd:latest and :${GITHUB_SHA::12}"

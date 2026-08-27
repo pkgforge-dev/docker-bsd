@@ -18,7 +18,7 @@ entries themselves. Do not add a "previous sessions" section.
 ```text
 session started 2026-08-27T12:54:52Z
 baseline        this repository became standalone in this session
-entries         total 19  open 18  blocked 0  done 1
+entries         total 20  open 19  blocked 0  done 1
 ```
 
 ⚠ The counts above are checked against [`INDEX.md`](INDEX.md)'s rows by

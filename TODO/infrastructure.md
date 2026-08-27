@@ -287,3 +287,61 @@ one-fact-one-home check must still pass.
 believed, and every such sentence is reachable from
 [`../HISTORY/README.md`](../HISTORY/README.md). ⚠ Checked by reading, not by
 a script: no check can recognise "this sentence is a memoir".
+
+---
+
+## INF-08. The shared console driver returns the right answer late
+
+**Source** Reproduced 2026-08-27 while building the `IMG-01` image, which reads
+a command's output back out of a guest's serial console.
+**Category** infrastructure · **Priority** P1 · **Effort** S · **Status** open
+
+### Problem
+
+⛔ **`Console.run()` in [`../experiments/lib/console.py`](../experiments/lib/console.py)
+always burns its whole timeout.** It decides a command has finished by waiting
+for one more prompt than there was before it typed, and it counts prompts with
+a pattern anchored by a dollar sign. Python matches that anchor at the end of
+the string only, so the count is 0 or 1 and never rises. "One more than before"
+is never true.
+
+```bash
+python -c "import re; t='out\n# '; print(len(re.compile(r'# $').findall(t+'x\n# ')))"
+```
+
+⛔ **It answers 1, and it answers 1 after the command as well.** The output is
+collected correctly and returned, so every caller gets the right answer after
+the full budget rather than a wrong one. That is why nothing noticed.
+
+### What it cost, measured
+
+⚠ [`../experiments/35-boot-in-container.sh`](../experiments/35-boot-in-container.sh)
+runs five commands at 90 seconds each. Nothing it published is wrong: the boot
+time comes from `wait_for`, which is sound. ⛔ **The image built for `IMG-01`
+could not use `run()` at all**, because a consumer's `podman run` cannot take
+fifteen minutes to print one line, and that is what made this visible.
+
+### Approach
+
+⚠ **The twin has to move with it.** `console.ps1` is the other half and
+`tests/run.sh` asserts both carry the same two measured tty rules.
+
+1. count prompts with a pattern that can match more than once, or track a
+   position in the stream rather than a count;
+2. ⛔ **plant the defect first.** A test that types one command and asserts it
+   returns in well under the timeout, seen to fail against today's code;
+3. check whether `console.ps1` has the same defect, and say so either way.
+
+⭐ **The image does not wait for this.** `images/netbsd/guest.py` brackets the
+command with two markers the echo cannot contain and waits for the second one,
+which is a better completion signal than a prompt count and is why that file
+uses `send` and `wait_for` directly.
+
+### Prove
+
+```bash
+sh experiments/35-boot-in-container.sh
+```
+
+⛔ Exit 0, and the whole run finishes in a time that is not a multiple of the
+per-command timeout.
