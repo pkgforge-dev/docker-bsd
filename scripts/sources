@@ -162,7 +162,27 @@ SMOL_RESCUE_PACKAGES=""
 SMOL_RESCUE_PKG_URL=""
 SMOL_RESCUE_PKG_PINNED_SHA256=""
 SMOL_BUILD_SIZE="2G"
-SMOL_BUILD_PACKAGES="/guest-package.tgz"
+
+# ⛔ EMPTY, AND THAT IS A MEASURED RETREAT RATHER THAN AN OVERSIGHT. Installing
+# this package by booting the guest DOES NOT COMPLETE. Measured 2026-08-28,
+# twice: the guest echoes the command, prints nothing at all for fifty minutes
+# with the emulator at full tilt, and the driver gives up at its timeout. It is
+# not slow. It does not finish.
+#
+# ⛔ SO THE STEP IS OFF UNTIL INF-09 EXPLAINS IT. A build step that provably
+# cannot pass is a red default branch that teaches everybody to ignore a red
+# default branch, and nothing else in the variant depends on it.
+#
+# ⭐ EVERYTHING THE STEP NEEDED IS STILL THERE, which is the point of turning
+# the step off rather than the variant. The package file is inside the guest at
+# the path below, the root filesystem is grown to hold what it unpacks to, and
+# the guest has a network. A session picking up INF-09 boots the image and runs
+# `pkg_add -U /guest-package.tgz` by hand, with nothing to set up first.
+#
+# ⚠ The path it sits at in the guest is `/guest-package.tgz`, written here as a
+# comment rather than a variable: a variable nothing reads is a variable a
+# linter is right to object to, and this is a fact for a person.
+SMOL_BUILD_PACKAGES=""
 
 # ⭐ THE PACKAGE IS FETCHED BY LINUX AND WRITTEN INTO THE GUEST'S FILESYSTEM
 # BEFORE IT BOOTS, and that is a measured decision rather than a tidy one.

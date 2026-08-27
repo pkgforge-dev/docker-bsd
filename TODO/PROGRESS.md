@@ -60,7 +60,8 @@ not repeated here**: one fact, one home.
    `exit 3` and requires exactly 3 back, so the acceptance is not theatre.
 2. ⭐ **A second variant with a real userland**, `netbsd:build`, carrying
    `uname`, `make`, `pkg_add` and `pkgin`, with a root filesystem grown from
-   Linux and a compiler installed at build time.
+   Linux and a compiler package staged inside it. ⛔ **Installing that package
+   at build time was tried and does not finish**, which is `INF-09`.
 3. ⭐ **A timing harness this project did not have.**
    [`../scripts/time-image`](../scripts/time-image) runs anywhere, reports a
    median over several runs, and ⛔ **says which accelerator actually ran**
@@ -108,17 +109,18 @@ The userland is real and the package manager works: it was watched fetching
 from its repository, and it was watched filling a 201 MB filesystem with a
 490 MB compiler, which is why the root is grown now.
 
-⛔ **What is in flight, so the next session does not rediscover it:** the build
-that installs the compiler into the guest had run for over forty minutes of
-emulated CPU when this session ended, both locally and on a runner. ⚠ It is not
-stuck: the emulator is at 100 percent the whole time. `INF-09` owns finding out
-why, and ⛔ **that job may be red on `main`**. The rescue variant and the
-published image are unaffected: the matrix is not fail-fast and each variant is
-its own job.
+⛔ **What was tried and does not work, so nobody repeats it:** installing the
+compiler by booting the guest DOES NOT FINISH. The guest echoes the command,
+prints `__bsdout__`, and then prints nothing at all for fifty minutes with the
+emulator at 100 percent. Measured twice. ⭐ **The step is switched off** in
+`scripts/sources` so the default branch is not permanently red, and everything
+it needed is still in the image: the package, the room to unpack it, and a
+network.
 
-⭐ **What to do first with it.** Do not start by fixing the build. Run the three
-measurements `INF-09` asks for, because a fix chosen before them is the fourth
-guess after three dead ones.
+⭐ **What to do first with it.** Boot `netbsd:build` and run
+`pkg_add -U /guest-package.tgz` by hand, with a long timeout, and watch it. That
+needs no setup at all. ⛔ Do not start by fixing the build: three explanations
+are already dead and a fix chosen now is the fourth guess.
 
 ### 2a. ⭐ `PERF-01`, and half of it is already measured
 

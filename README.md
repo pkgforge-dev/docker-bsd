@@ -63,11 +63,15 @@ with `--network none` and needs no privilege, no capability and no device.
 | tag | what is in it | state |
 | --- | --- | --- |
 | ⭐ `netbsd:latest` | a rescue userland. A shell and `sysctl`. ⛔ No `uname`, no `ls`, no compiler | ⭐ **published.** The command above pulls it |
-| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, and a C and C++ compiler | ⛔ **built and proved in CI, not yet published.** `IMG-02` |
+| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, a network, and a compiler package staged inside it ready to install | ⛔ **built and proved in CI, not yet published.** `IMG-02` |
 
 ⛔ **Do not write a `docker pull` for `netbsd:build` yet.** It does not exist in
 the registry, and a command in a README that returns a 404 is worse than no
 command.
+
+⚠ **The compiler is staged, not installed.** Installing it at build time was
+tried and does not finish, which is `INF-09` in [`TODO/INDEX.md`](TODO/INDEX.md)
+and is written up with what was ruled out.
 
 ⛔ **What neither of them does yet:** `-v`, `-p` and `-e` reach the **container**
 and stop there. The BSD is a virtual machine inside it with its own filesystem,
@@ -154,7 +158,8 @@ full account, with numbers, is [`docs/LIMITS.md`](docs/LIMITS.md).
 | limit | what it means |
 | --- | --- |
 | ⛔ the images cannot run on Linux | see the top of this file. A BSD kernel is required |
-| ⛔ no published image boots itself yet | the route is measured, the packaging is not built |
+| ⭐ **one published image boots itself** | `netbsd:latest`. ⚠ The other four are userlands and still need a BSD kernel |
+| ⛔ nothing you build inside the guest comes out | `-v` reaches the container and stops there. `IMG-03` |
 | ⚠ three of four BSDs have no runtime | `ocijail` exists for FreeBSD. Nothing equivalent exists for the others |
 | ⚠ NetBSD and OpenBSD import **one set** | `podman import` takes a single tar. `base` is a complete userland; `etc` and the rest are not merged in |
 | ⚠ DragonFly is **method-verified, not yet built** | the ISO9660 route was confirmed by reading the `CD001` signature; the 748 MB extraction has not been run end to end |

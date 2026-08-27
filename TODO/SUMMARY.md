@@ -51,7 +51,7 @@ fact, one home.
 | the question | the answer today |
 | --- | --- |
 | can I run a BSD in one command | ⭐ **yes.** That is new |
-| is there a real userland in it | ⭐ **yes**, in `netbsd:build`: `uname`, `make`, `pkg_add`, `pkgin`, and a compiler installed at build time |
+| is there a real userland in it | ⭐ **yes**, in `netbsd:build`: `uname`, `make`, `pkg_add`, `pkgin` and a network. ⛔ The compiler is staged inside it and not installed: installing it does not finish, which is `INF-09` |
 | can I get a source tree in and a binary out | ⛔ **no.** `-v`, `-p` and `-e` still stop at the container. `IMG-03` |
 | what does real work cost | ⛔ **still unknown.** Nothing here has compiled anything and timed it |
 | would I switch from a cross toolchain | ⛔ **no evidence either way.** `PERF-02`, `PERF-03`, and the bar is 5 percent |

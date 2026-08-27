@@ -355,15 +355,73 @@ per-command timeout.
 
 ### Problem
 
-⛔ **Installing one compiler into the guest takes longer than every other step
-in the image build put together**, and it is the reason that job's timeout is
-two hours rather than twenty minutes.
+⛔ **Installing one compiler into the guest DOES NOT FINISH.** Measured twice on
+2026-08-28, once locally and once on a runner. It is not slow. It does not
+complete.
 
 The step boots the guest and runs `pkg_add` on a package that is already inside
-its filesystem. No network is involved. It is half a gigabyte of files, and
-under emulation that is tens of minutes.
+its filesystem, with no network at all. ⛔ **What the console shows is the
+useful part:**
 
-### ⛔ THE CAUSE IS NOT KNOWN, AND THREE GUESSES ARE ALREADY DEAD
+```text
+echo "__bsdo""ut__"; ( pkg_add -U /guest-package.tgz && ... ); echo "__bsdr""c__$?"
+__bsdout__
+```
+
+⚠ **And then nothing, for fifty minutes**, with the emulator at 100 percent CPU
+throughout. `pkg_add` prints no progress, no error and no exit status. The
+driver gives up at its own timeout.
+
+⭐ **The step is switched off in [`../scripts/sources`](../scripts/sources)
+until this entry explains it**, because a build step that provably cannot pass
+is a red default branch that teaches everybody to ignore a red default branch.
+⚠ **Nothing it needed was removed**: the package is still written into the
+guest at `/guest-package.tgz`, the root is still grown to hold what it unpacks
+to, and the guest still has a network. Booting the image and running `pkg_add`
+by hand needs no setup at all, which is the cheapest possible starting point.
+
+### ⭐ A CAUSE, FOUND BY MEASURING RATHER THAN BY THE FOURTH GUESS
+
+⛔ **`/tmp` in the guest is a 32 MB tmpfs, and the compiler is 490 MB.**
+
+```text
+tmpfs           32M   4.0K    32M   1% /tmp
+/dev/dk0       1.9G   365M   1.4G  21% /
+```
+
+⭐ **`pkg_add` stages into `$TMPDIR`, which defaults there.** Extracting the
+same package by hand reproduces it exactly: 32,772 KB written, then
+`No space left on device`, on a filesystem with 1.4 GB free a directory away.
+
+⛔ **A candidate fix is one environment variable**, and it is a candidate rather
+than the answer until somebody watches it finish:
+
+```bash
+TMPDIR=/var/tmp pkg_add -U /guest-package.tgz
+```
+
+⚠ **`/var/tmp` is on the root**, which the mount table above shows: only `/tmp`,
+`/dev` and `/etc/openssl` are tmpfs.
+
+⛔ **Do not write this up as solved on the strength of the diagnosis.** The full
+staging area is measured and certain; that it was the ONLY thing wrong is not.
+A run with `TMPDIR` set was still going after ten minutes when this was written,
+which is consistent with a slow install and also consistent with a second
+problem underneath the first.
+
+⚠ **Growing the root filesystem was still necessary and was not sufficient.**
+The published userland has 201 MB free and the installed compiler needs 490 MB,
+so the first failure was real. ⛔ **The second failure was a different one
+wearing the same clothes**, and the size of the root has no effect on it at
+all: the staging area is 32 MB whatever the disk is.
+
+⚠ **The silence is now explained too.** `pkg_add` did not report the full
+staging area and did not exit; it produced nothing at all and kept the CPU
+busy, which is why every guess below was about throughput.
+
+---
+
+### ⛔ FOUR GUESSES, ALL DEAD, KEPT BECAUSE EACH ONE COST A DIFFERENT FIX
 
 ⚠ **This entry was first written with a confident explanation and the
 explanation was wrong.** It is corrected here rather than quietly, because the
@@ -374,40 +432,42 @@ would have sent the fix in a different direction.
 | --- | --- |
 | it is fetching over the emulated network | ⛔ **no.** The package is written into the guest's filesystem from Linux before it boots, and the stage has no network at all |
 | the emulated disk is slow | ⛔ **no.** The guest writes 100 MB in 2.5 seconds, 42 MB per second. Half a gigabyte of bulk writing is about twelve seconds |
-| ⚠ it is tens of thousands of small files | ⛔ **no, and this was the confident one.** The package holds **1,664** files. `xz -dc gcc14.tgz \| tar t \| wc -l` |
+| ⚠ it is tens of thousands of small files | ⛔ **no, and this was the confident one.** The package holds **1,664** files |
+| it is the xz decode, which is expensive per byte | ⛔ **no.** Decoding the whole 107 MB package inside the guest takes **17 seconds** |
 
-⭐ **One thing was learned while killing the third guess**: the package is **xz**
-compressed, not gzip, whatever its `.tgz` name says. LZMA decoding is expensive
-per byte and emulation is expensive per instruction. ⛔ **That is a hypothesis
-and it is not measured**, and this entry does not get another confident
-explanation until somebody times the decompression on its own.
+⭐ **What finally found it was not another theory about speed.** It was
+extracting the package by hand and reading the error, which named a full
+filesystem rather than anything slow. ⛔ **Every guess above is about
+throughput, and the answer was capacity**, in a place nobody had looked because
+the root had 1.4 GB free.
 
 ### Approach
 
-⛔ **Find the cause first.** Three cheap measurements, in order, each inside the
-guest:
+⭐ **Watch `TMPDIR=/var/tmp pkg_add` to a conclusion first.** It either finishes
+or it does not, and that single answer decides whether this entry is a
+one-variable fix or still an open investigation. ⛔ Neither is supported yet.
 
-1. `xz -dc` the package to `/dev/null` and time it. That isolates the decode
-   from everything else;
-2. `tar t` the decoded stream to `/dev/null` and time it;
-3. the same two on the Linux side, for a ratio.
+⭐ **If it finishes**, set `TMPDIR` in
+[`../images/netbsd/Containerfile`](../images/netbsd/Containerfile) and turn the
+step back on in [`../scripts/sources`](../scripts/sources). ⚠ Then measure what
+it costs, because "it finishes" and "it finishes inside a runner's budget" are
+different claims.
 
-⭐ **Then the fix follows from the answer, and two are already obvious:**
+⚠ **If it does not**, the next measurement is file creation rate. Extracting by
+hand wrote 32 MB in 34 seconds where bulk `dd` does 42 MB per second, which
+hints that metadata operations are the expensive part and that the answer is to
+not boot the guest at all: the root is ext2 and Linux already writes into it.
 
-- if it is the decode, recompress the package on the Linux side into something
-  cheap to decode. The guest never has to know it was ever xz;
-- if it is the extraction, do not boot the guest at all. Its root filesystem is
-  ext2 and Linux already writes into it with `debugfs`, which is how the
-  package and the benchmark source get there.
-
-⚠ **What makes it an `M` rather than an `S`** if the second route is taken: a
-pkgsrc package is a tar plus metadata, and `pkg_add` also registers it in the
-package database. Files alone give a working compiler and a package database
-that does not know about it.
+⛔ **And do not leave the trap in place for a consumer.** Somebody who boots the
+build variant and runs `pkg_add` by hand meets exactly this, with the same
+silence. The honest options are a `TMPDIR` baked into the image's environment,
+or a larger `/tmp`, and neither is written yet.
 
 ### Prove
 
-⛔ **A number for the cause**, in [`../docs/LIMITS.md`](../docs/LIMITS.md),
-before any fix is written. Then the build variant's image builds in a time
-comparable to the rescue variant's, the compile the benchmark runs still
-succeeds inside it, and `pkg_info` still lists what is installed.
+```bash
+podman run --rm -i IMAGE sh -c 'TMPDIR=/var/tmp pkg_add -U /guest-package.tgz && gcc --version'
+```
+
+⛔ Exit 0 and a version, with the whole thing inside a runner's job budget, and
+`pkg_info` listing what is installed.
