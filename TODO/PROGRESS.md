@@ -83,6 +83,10 @@ seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md), and the readings are in
    both.
 5. ⛔ **`README.md` and `docs/LIMITS.md` amended** where they told a consumer the
    build variant was closer to usable than it is.
+6. ⛔ **Two rules the operator ruled on, and a command that enforces one of
+   them.** `RULES.md` decisions 9 and 10, an end protocol with a step 0, and
+   [`../scripts/common/reap.sh`](../scripts/common/reap.sh), which was seen to
+   refuse on its first run because a guest was still going.
 
 ---
 
@@ -157,17 +161,21 @@ than the emulator binary and exists to run 15 KB of driver.
 
 ---
 
-## ⚠ One decision is waiting on the operator
+## ⭐ Two rules were ruled on, and one gap is left behind them
 
-⭐ **Offered by [`../HISTORY/reviews/15-somebody-who-started-building-on-last-sessions-answer.md`](../HISTORY/reviews/15-somebody-who-started-building-on-last-sessions-answer.md)
-and not taken**, because [`RULES.md`](RULES.md) is the operator's file:
+⛔ **[`RULES.md`](RULES.md) decisions 9 and 10**, both ruled 2026-08-28: a
+direction-changing control is run twice, and a session leaves the **machine** as
+it found it rather than only the tree. ⚠ The second came out of a measurement:
+435 images, 37.27 GB, 100 percent reclaimable, carrying this repository's own
+labels.
 
-⛔ **add a row saying a control that changes the direction of an entry is run
-twice before it is published.** ⚠ Not every measurement: only the ones a
-conclusion turns on, because a rule that doubles every run is a rule that gets
-ignored. `RULES.md` already says a benchmark result is a median over several
-runs; nothing says it about a diagnosis, and a wrong diagnosis publishes a wrong
-direction rather than a wrong number.
+⛔ **The gap that is left, and it is one line of Containerfile.**
+[`../scripts/common/reap.sh`](../scripts/common/reap.sh) can prove 14.1 GB of
+that is this project's and cannot prove the rest, because the `fetch` stage of
+[`../images/netbsd/Containerfile`](../images/netbsd/Containerfile) sets no label
+before it is discarded. ⭐ **Give every stage the source label** and the reaper
+can account for all of it; ⛔ **do not loosen the match instead**, because the
+machine runs other projects.
 
 ---
 

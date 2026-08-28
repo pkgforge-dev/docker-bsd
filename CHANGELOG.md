@@ -21,6 +21,50 @@ entry. A superseded one is amended in place with a dated note.
 
 ## 2026-08-28
 
+### 2026-08-28T13:30:00Z: the session teardown becomes a command, not a promise
+
+**Record:** `RULES.md` decisions 9 and 10 and its rewritten end protocol;
+[`scripts/common/reap.sh`](scripts/common/reap.sh).
+**Deployed:** ⛔ **no.** No image was built or published.
+
+⛔ **The operator asked what agents leave behind on their machine, and the
+answer was measured rather than reassured.**
+
+| what was checked | what was found |
+| --- | --- |
+| stray processes | ⭐ **none.** One emulator, running, in flight, deliberate |
+| exited containers | ⭐ **zero.** Every `podman run` in this repository passes `--rm` |
+| volumes | ⭐ **none of ours.** This project creates none |
+| ⛔ **disk** | ⛔ **435 images, 37.27 GB, 100 percent reclaimable.** Sampled layers carry this repository's own OCI source label and `BSD_ROOT_LABEL` |
+
+⛔ **The leak is `podman build`, which has no `--rm` to pass**, and nothing had
+ever pruned. ⭐ **`scripts/common/reap.sh` is the answer and it was seen to
+refuse on its first run**, because a guest was still running:
+
+```text
+reap: a guest of this project is still running, so nothing was removed.
+      TODO/RULES.md step 0: a session with a measurement in flight has
+      not ended.
+```
+
+- ⭐ **`RULES.md` decision 9**, ruled by the operator: a control that changes the
+  direction of an entry is run **twice** before it is published. The rule
+  existed for benchmarks and not for diagnoses, and a diagnosis is where a
+  single reading does the most damage.
+- ⭐ **`RULES.md` decision 10**: a session leaves the **machine** as it found it,
+  not just the tree.
+- ⛔ **The end protocol gained a step 0 and a step 5.** Step 0 says a session
+  with a measurement in flight has not ended and must not write a summary; step
+  5 is `reap.sh`, whose refusal enforces step 0 rather than relying on it being
+  remembered. ⚠ **Both are written from an incident in this session**, recorded
+  in the step itself rather than in a postmortem nobody reads.
+- ⚠ **The reaper deliberately under-claims**: 14.1 GB of the 37.27 GB is
+  provably this project's, and the rest carries no marker because the
+  `Containerfile`'s `fetch` stage sets no label. ⛔ **The fix is to label every
+  stage**, not to loosen the match.
+
+---
+
 ### 2026-08-28T12:00:00Z: ran the control a second time, and it withdrew the answer
 
 **Record:** `INF-09`, `INF-08` and `INF-10` in
