@@ -210,6 +210,11 @@ the seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md).
 3. ⚠ **Say what the `tar` route gives up.** No dependency resolution: `gcc14`
    declares none, which is why one file was ever enough, and the next package
    will not be so kind.
+4. ⛔ **And know what it still will not buy.** With the toolchain in place, the
+   first real compile **did not finish in an hour**. ⚠ **This entry's own Prove
+   line asks for a recorded build time**, and there is not one.
+   [`../docs/LIMITS.md`](../docs/LIMITS.md) carries what there is. ⛔ **`IMG-02`
+   does not close on an image that boots, installs and cannot build.**
 
 ### Prove
 

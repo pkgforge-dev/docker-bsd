@@ -761,3 +761,65 @@ and on the PowerShell side a pending task on the stream, so the next write
 throws. ⛔ **That is why it returns a value**: a caller that gets `False` stops
 the guest. It does not type again.
 
+---
+
+## INF-11. The gate can hang forever, because nothing in it is bounded
+
+**Source** Measured 2026-08-28: a full `check-gate.sh` run sat in
+`check-binfmt.sh --json` for **more than sixteen minutes** and had to be killed.
+**Category** infrastructure · **Priority** P2 · **Effort** S · **Status** open
+
+### Problem
+
+⛔ **No call in [`../scripts/common/`](../scripts/common/) has a timeout.**
+`grep -rn 'timeout ' scripts/common/*.sh` returns nothing. The one that hung
+shells out to another operating system:
+
+```sh
+"$WSL" -d "$DISTRO" -u root -- /bin/sh -lc 'exit 0'
+```
+
+⚠ **The hang was not reproduced.** Run again on its own, immediately after, that
+same check answered in seconds, and `wsl.exe -e true` answered in under a
+second. ⛔ **So the CAUSE is not established and the DEFECT is**, and they are
+different claims: the defect is that there is no bound, which is true by reading
+regardless of what wedged that day.
+
+⛔ **This is the third time this repository has met the same shape.** `INF-08`
+was a read that returned late, `INF-10` a write that never returned, and this is
+a gate that can wait for ever. ⚠ **Each was found by waiting**, not by a test.
+
+⚠ **And CI hides it.** `ci.yml` sets `timeout-minutes: 20`, so on a runner this
+fails as a job timeout with no indication which check hung. ⛔ **On a developer's
+machine there is no bound at all.**
+
+### ⚠ A contributing condition, measured and worth writing down
+
+⛔ **The session that hit this was polling `podman machine ssh` every 45 seconds
+from a hold loop while the gate ran.** Both go through `wsl.exe` and the same
+distro. ⚠ **That is not proof of contention** and it is the only unusual thing
+about the run. ⭐ **A hold loop's "cheap check" must not touch what it is waiting
+on**, which is now a row in
+[`../docs/conventions/forbidden-patterns.md`](../docs/conventions/forbidden-patterns.md).
+
+### Approach
+
+1. ⭐ **Bound the external calls**, not the whole gate. A gate-wide timeout says
+   "something hung"; a per-call one names it.
+2. ⚠ **`timeout` is not everywhere.** It is coreutils, present in Git Bash and
+   on a runner, absent on some minimal hosts. ⛔ **Detect it and say so rather
+   than silently running unbounded**, the way `check-gate.sh` already reports a
+   missing `shellcheck` as a SKIP rather than a pass.
+3. ⛔ **Plant it.** A check that sleeps past its bound, seen to be killed and
+   reported, or the bound is decoration.
+4. ⚠ **Report a timeout as a distinct outcome**, not as a failure. A host whose
+   WSL is wedged has not got a defective tree.
+
+### Prove
+
+```bash
+sh scripts/common/check-gate.sh
+```
+
+⛔ Completes or reports which check exceeded its bound, within a stated wall
+time, with the defect planted and the kill seen.

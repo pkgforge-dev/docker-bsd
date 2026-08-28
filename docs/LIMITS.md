@@ -232,6 +232,43 @@ root in **61 seconds** and all three files are then present.
 and no toolchain to run it against.** ⛔ `IMG-02` owns both halves and neither is
 in a published image yet.
 
+### ⛔ AND A COMPILE INSIDE IT DID NOT FINISH IN AN HOUR. Measured 2026-08-28
+
+⭐ **The toolchain gap is closed and the guest still cannot be used for work.**
+With the `comp` set in and `gcc14` installed, the first real compile was run:
+
+| | |
+| --- | --- |
+| the workload | `cc -O2 -c sqlite3.c`, SQLite 3.50.4's amalgamation, about a quarter of a million lines |
+| ⭐ on Linux, in a container on this laptop | **27 s**, best of three |
+| ⛔ in the guest, unaccelerated, 1 vCPU, 1 GB | ⛔ **did not finish in 3,600 s**, one run |
+
+⚠ **The two compilers are not the same build.** The guest has pkgsrc's `gcc14`
+targeting NetBSD and the Linux side has Alpine's `gcc` targeting Linux. ⛔ **This
+is an order of magnitude, not a five percent gate**, and
+[`../scripts/bench-compile`](../scripts/bench-compile) says so in its own
+header. ⚠ **And side A as `PERF-02` actually defines it**, `clang --target`
+against a BSD sysroot, **has never been run here at all.**
+
+⛔ **So the penalty is not a ratio. It is a floor of more than 130x, and the
+top of it was not reached.** The emulator held 100 percent of a CPU for the
+whole hour, so the guest was executing rather than wedged, and the command had
+started: its output marker arrived and nothing followed it.
+
+⚠ **What is NOT known, and it matters:** whether that compile would ever have
+finished. ⛔ Nothing distinguishes "slow" from "stuck the way `pkg_add` is
+stuck" without a SIGINFO reading, and none was taken during this run.
+
+⭐ **What this settles for `PERF-03`.** Its gate is 5 percent against a
+developer who does not use this project, and
+[`../HISTORY/reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md`](../HISTORY/reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md)
+established that that developer's alternative is `clang --target`, native, with
+no virtual machine at all. ⛔ **An unaccelerated guest is not within 5 percent
+of that and will not be**, and the entry does not close by moving the gate.
+⚠ The open question is no longer "how much slower"; it is **whether a container
+on a free runner can be given a usable `/dev/kvm`**, because that is the only
+lever with the right order of magnitude behind it.
+
 ### ⛔ `--device /dev/kvm` does NOT accelerate anything on a free runner
 
 ⭐ **This is the most useful thing measured on the runner, and it was nearly

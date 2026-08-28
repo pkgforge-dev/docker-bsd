@@ -18,7 +18,7 @@ entries themselves. Do not add a "previous sessions" section.
 ```text
 session started 2026-08-28T09:00:00Z
 baseline        an image that boots, and an answer to INF-09 that did not survive a repeat
-entries         total 22  open 18  blocked 0  done 4
+entries         total 23  open 19  blocked 0  done 4
 ```
 
 ⚠ The counts above are checked against [`INDEX.md`](INDEX.md)'s rows by
@@ -86,7 +86,18 @@ seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md), and the readings are in
 6. ⛔ **Two rules the operator ruled on, and a command that enforces one of
    them.** `RULES.md` decisions 9 and 10, an end protocol with a step 0, and
    [`../scripts/common/reap.sh`](../scripts/common/reap.sh), which was seen to
-   refuse on its first run because a guest was still going.
+   refuse on its first run because a guest was still going. ⭐ **19.07 GB
+   reclaimed**, 435 images down to 283, other projects' images and all four
+   volumes untouched.
+7. ⭐ **Five deep reviews, not two**, because the session was corrected twice by
+   the operator and each correction was worth a lens. ⛔ **Review 17 is the one
+   to read first**: it re-runs "does this project deserve to exist" now that
+   both sides of the ratio exist, and it does not answer comfortably.
+8. ⛔ **AND THE COMPILE DID NOT FINISH IN AN HOUR.** With the toolchain in
+   place, `cc -O2 -c sqlite3.c` ran inside the guest for 3,600 seconds at
+   100 percent of a CPU and never returned, against 27 s on Linux. ⚠ **That is
+   a floor of more than 130x with the top not reached**, and it is the most
+   important number this session produced.
 
 ---
 
@@ -110,7 +121,19 @@ seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md), and the readings are in
 `scripts/sources` pins NetBSD **10.1** for the OCI userlands. Two versions for
 two purposes is defensible and is written down nowhere.
 
-### 2. ⭐ `PERF-01`, which unblocks the moment 1 lands
+### 2. ⛔ `PERF-01`, and the question changed shape
+
+⛔ **The guest side is no longer blocked; it is slow past the point of
+measurement.** `cc -O2 -c sqlite3.c` did not return in 3,600 s.
+⚠ **A ratio with no numerator is not a ratio**, so the first job is to find out
+whether it terminates at all: rerun it under
+[`../experiments/43-siginfo-the-stuck-guest.sh`](../experiments/43-siginfo-the-stuck-guest.sh)
+and read the user time. ⛔ **If user time freezes, this is `INF-09` in a second
+program** and the entry's shape changes completely; if it climbs, the workload
+is simply too big for an unaccelerated guest and a smaller real file gives a
+finite number.
+
+### 3. ⭐ `PERF-01`'s other half, which was never blocked
 
 ⛔ **The Linux side is measured and the guest side has never had a compiler to
 run.** [`../scripts/bench-compile`](../scripts/bench-compile) runs both against
@@ -125,7 +148,7 @@ glue. ⛔ **No BSD host, no VM.** `usable.md`, the `R29` and `R30` sections.
 ⚠ **`scripts/sources` fetches `base` and `etc` and not `comp`**, the same gap
 as 1, for a different consumer.
 
-### 3. ⚠ `INF-09` is narrowed and not closed
+### 4. ⚠ `INF-09` is narrowed and not closed
 
 ⛔ **Do not rebuild the filesystem.** Four controls say it is not the problem.
 ⭐ **What would close it** is reading which loop the kernel is in after the
@@ -136,7 +159,16 @@ last extracted file and the pkgdb write. ⚠ Neither has been done.
 ⚠ **And decide what a consumer is told**, because `pkg_add` is in the image and
 does not work on anything large.
 
-### 4. ⛔ `PERF-02` then `PERF-03`, and design them against the variance
+### 5. ⛔ `PERF-02` then `PERF-03`, and the gate is now in doubt
+
+⛔ **THE GATE IS 5 PERCENT AND THE MEASURED FLOOR IS OVER 130x.** Side A is
+`clang --target` on the runner, native, with no virtual machine at all; side B
+is an unaccelerated emulated guest that did not finish an hour-long compile.
+⚠ **Nothing in `OPT-01` to `OPT-03` closes a gap of that size**: an allocator, a
+smaller emulator binary and a different container runtime are percentage levers
+against a two-order-of-magnitude gap. ⭐ **The only lever with the right order of
+magnitude is acceleration**, so the highest-value unknown in this project is now
+one question: **can a container on a free runner be given a usable `/dev/kvm`?**
 
 ⚠ **Read [`../docs/LIMITS.md`](../docs/LIMITS.md) section 1b before designing
 either.** A free runner moves by 42 percent between jobs and under 1 percent
@@ -153,7 +185,7 @@ specific: can a container on a free runner be given a usable one? `usable.md`'s
 `guest.py` asks for `-cpu host,+invtsc`, and a NetBSD guest on a host CPU with
 AMX jumps to address 0 while starting init. The mask is in `R31`.
 
-### 5. ⚠ `IMG-03`, `INF-04`, `INF-06`, and the `OPT-*` levers
+### 6. ⚠ `IMG-03`, `INF-04`, `INF-06`, and the `OPT-*` levers
 
 ⛔ **Do not pull an `OPT` lever before `PERF-02` says which layer is stuck.**
 ⚠ `OPT-02` now has numbers rather than an impression: the interpreter is bigger

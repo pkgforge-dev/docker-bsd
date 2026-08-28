@@ -52,6 +52,9 @@ about; a review named after a person finds what that person would trip over.
 | [`reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md`](reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md) | ⛔ review 7 re-run against evidence it did not have. The alternative got cheaper |
 | [`reviews/15-somebody-who-started-building-on-last-sessions-answer.md`](reviews/15-somebody-who-started-building-on-last-sessions-answer.md) | ⛔ a reader who believed yesterday's answer and spent the day on it. What a single unrepeated control costs |
 | [`reviews/16-somebody-who-pulled-the-build-variant-to-compile-something.md`](reviews/16-somebody-who-pulled-the-build-variant-to-compile-something.md) | ⭐ a developer reading the image rather than the repository, walking into three walls of which one was documented |
+| [`reviews/17-somebody-deciding-whether-to-fund-another-month.md`](reviews/17-somebody-deciding-whether-to-fund-another-month.md) | ⛔ reviews 7 and 14 re-run now that BOTH sides of the ratio exist. The gate is 5 percent and the measured floor is over 130x |
+| [`reviews/18-somebody-auditing-this-sessions-own-instruments.md`](reviews/18-somebody-auditing-this-sessions-own-instruments.md) | ⛔ review 10's method turned on the session that corrected review 10. Four of this session's own instruments were defective |
+| [`reviews/19-the-operator-looking-at-their-own-laptop.md`](reviews/19-the-operator-looking-at-their-own-laptop.md) | ⭐ the person who owns the machine rather than the repository, asking what running these sessions has left on it |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a

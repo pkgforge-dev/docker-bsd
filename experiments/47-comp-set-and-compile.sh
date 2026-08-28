@@ -44,6 +44,25 @@
 # there was no compiler. The workload here is the same line against the same
 # bytes: the image already carries `/sqlite3.c` inside the guest.
 #
+# ── ⭐ WHAT IT FOUND, 2026-08-28 ───────────────────────────────────────────
+#
+#   extract the comp set            61 s, and as, sys/cdefs.h and libc.a appear
+#   install gcc14 with tar          rc=0, pkg_info -e finds it
+#   cc -O2 -c sqlite3.c             ⛔ DID NOT FINISH IN 3600 s
+#
+# ⛔ THE TOOLCHAIN GAP IS CLOSED AND THE GUEST STILL CANNOT DO WORK. The
+# emulator held 100 percent of a CPU for the whole hour and the command's
+# output marker had arrived, so it was executing rather than wedged.
+# ⚠ Whether it would EVER have finished is not measured: no SIGINFO reading
+# was taken during the compile, so `slow` and `stuck` are not separated.
+# ⭐ Take one next time. 43 is the instrument and it costs one Ctrl-T.
+#
+# ⛔ AND THIS FILE WAS EDITED WHILE IT WAS RUNNING, which is how the run
+# ended `line 270: -c: command not found` with exit 127 AFTER its own result
+# had printed correctly. A shell resumes a script at a byte offset, so an
+# inserted line shifts everything after it. The measurement is sound and the
+# exit code is not. docs/conventions/forbidden-patterns.md carries the row.
+#
 # Usage:
 #   sh experiments/47-comp-set-and-compile.sh [IMAGE]
 #

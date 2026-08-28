@@ -91,6 +91,31 @@ Linux half of the number is already in
 `/usr/pkg/gcc14/bin/gcc` in the guest, which is right, and it has never had a
 guest that could answer.
 
+### ⛔ AND THEN THE COMPILE DID NOT FINISH IN AN HOUR
+
+⭐ **The entry has half a number and it is the important half.** With the
+toolchain in place, `cc -O2 -c sqlite3.c` ran inside the guest and **did not
+return within 3,600 seconds**, against **27 s** for the same bytes on Linux. The
+seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md).
+
+⛔ **So this entry cannot close as written.** Its Prove line asks for three wall
+times and two ratios, and one of the three configurations does not terminate.
+⚠ **A ratio with no numerator is not a ratio**, and "more than 130x" is a floor
+rather than a measurement.
+
+⭐ **What to do about it, in order:**
+
+1. ⛔ **Find out whether it EVER finishes.** Rerun with
+   [`../experiments/43-siginfo-the-stuck-guest.sh`](../experiments/43-siginfo-the-stuck-guest.sh)
+   pressing Ctrl-T at it. ⚠ If user time climbs, it is slow and a longer budget
+   answers the question; if user time freezes the way `pkg_add`'s does, this is
+   `INF-09` again in a second program and the entry's whole shape changes.
+2. ⚠ **Shrink the workload rather than the question.** A quarter of a million
+   lines was chosen because it is real; a smaller real file gives a finite
+   number on the unaccelerated path and the ratio still transfers.
+3. ⛔ **Do not publish an accelerated number as the headline.** The case a
+   consumer with no device gets is the unaccelerated one, and it is this.
+
 ### Prove
 
 A table in [`../docs/LIMITS.md`](../docs/LIMITS.md) with the workload named, the

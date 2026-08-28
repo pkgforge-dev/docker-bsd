@@ -115,27 +115,34 @@ RUNNING_N=$(printf '%s' "$RUNNING" | grep -c . || true)
 # this project never built, and it is exactly the shortcut this script exists
 # not to take.
 #
-# ⛔ AND IT DELIBERATELY UNDER-CLAIMS. Measured on the first run: of 37.27 GB
-# podman called reclaimable, this identified 14.1 GB as provably ours. The rest
-# is mostly intermediate build stages that carry NO marker at all, because the
-# `fetch` stage of images/netbsd/Containerfile sets no label and no BSD_ env
-# before it is discarded. ⚠ They are almost certainly this project's too and
-# `almost certainly` is not the standard for deleting somebody's data.
+# ⛔ THREE MARKERS, AND THE THIRD IS WHAT CLOSED THE GAP. The first run of this
+# could prove only 14.1 GB of 37.27 GB was ours, because the `fetch` stage of
+# images/netbsd/Containerfile sets no label and no BSD_ env before it is
+# discarded. ⚠ Reading the remaining layers rather than guessing at them showed
+# that every one carries, in its BUILD HISTORY, something this repository owns:
 #
-# ⭐ THE FIX IS UPSTREAM OF HERE, not a looser match: give every stage in that
-# Containerfile the source label, and the next run of this can prove all of it.
-# ⛔ Until then this reports the gap rather than closing it by guessing.
+#   https://smolbsd.org/assets/netbsd-SMOL          a pin in scripts/sources
+#   https://github.com/NetBSDfr/smolBSD/releases/   a pin in scripts/sources
+#   sh /grow-rootfs.sh rootfs.img ...               a file in this repository
+#
+# ⭐ THAT IS PROOF RATHER THAN A HEURISTIC. Those strings are this project's own
+# pins and its own filename, and a neighbour's layer does not contain them.
+# ⛔ It is still far narrower than `image prune`, which takes every unnamed layer
+# on a machine that runs more than this project.
 EXITED=$("$ENGINE" ps -a --filter status=exited --format '{{.ID}} {{.Image}}' 2>/dev/null \
          | grep -E "$MINE" || true)
 EXITED_N=$(printf '%s' "$EXITED" | grep -c . || true)
 
 DANGLING=""
 DANGLING_BYTES=0
+# ⚠ THE HISTORY IS PART OF THE EVIDENCE, so it is part of what is read. A
+# discarded build stage keeps no label and no env, and its history is the only
+# place its origin survives.
 for id in $("$ENGINE" images --filter dangling=true --quiet 2>/dev/null); do
   meta=$("$ENGINE" image inspect "$id" \
-           --format '{{.Labels}}|{{range .Config.Env}}{{.}} {{end}}|{{.Size}}' 2>/dev/null) || continue
+           --format '{{.Labels}}|{{range .Config.Env}}{{.}} {{end}}|{{range .History}}{{.CreatedBy}} {{end}}|{{.Size}}' 2>/dev/null) || continue
   case "$meta" in
-    *pkgforge-dev/docker-bsd*|*BSD_ROOT_LABEL*)
+    *pkgforge-dev/docker-bsd*|*BSD_ROOT_LABEL*|*smolbsd.org/assets*|*NetBSDfr/smolBSD*|*grow-rootfs.sh*|*/opt/bsd/*)
       bytes=${meta##*|}
       DANGLING="$DANGLING $id"
       DANGLING_BYTES=$((DANGLING_BYTES + bytes))

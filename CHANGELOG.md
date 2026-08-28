@@ -21,6 +21,44 @@ entry. A superseded one is amended in place with a dated note.
 
 ## 2026-08-28
 
+### 2026-08-28T14:30:00Z: the guest can compile, and it did not finish in an hour
+
+**Record:** `PERF-01` in [`TODO/measurement.md`](TODO/measurement.md) and
+`IMG-02` in [`TODO/images.md`](TODO/images.md); the seconds in
+[`docs/LIMITS.md`](docs/LIMITS.md); `experiments/47-comp-set-and-compile.sh`.
+**Deployed:** ⛔ **no.** No image was built or published.
+
+⛔ **The most important number this project has produced, and it is a floor
+rather than a measurement.** With NetBSD 11.0's `comp` set carried in on a
+second disk and `gcc14` installed by `tar`, `cc -O2 -c sqlite3.c` ran inside the
+guest for **3,600 seconds at 100 percent of a CPU and never returned**. The same
+bytes take **27 s** on Linux on the same laptop.
+
+- ⛔ **More than 130x, with the top not reached.** `PERF-03`'s gate is 5 percent
+  against a developer running `clang --target` natively with no virtual machine.
+  ⚠ **No `OPT-*` lever closes a gap of that size**; acceleration is the only one
+  with the right order of magnitude, so the project's highest-value unknown is
+  now a single question: can a container on a free runner be given a usable
+  `/dev/kvm`?
+- ⚠ **Whether it would ever have finished is NOT measured.** No SIGINFO reading
+  was taken during the compile, so "slow" and "stuck the way `pkg_add` is stuck"
+  are not separated. That is the next session's first task and it costs one
+  Ctrl-T.
+- ⭐ **19.07 GB reclaimed** by `scripts/common/reap.sh`, 435 images down to 283.
+  Other projects' images and all four volumes untouched. ⚠ The reaper's
+  attribution was widened only after **reading** the remaining layers: every one
+  carries a URL this repository pins in `scripts/sources`, which is proof rather
+  than a heuristic.
+- ⛔ **Two traps this session paid for are now rows in
+  [`docs/conventions/forbidden-patterns.md`](docs/conventions/forbidden-patterns.md):**
+  editing a shell script while a shell is executing it, which killed a run's
+  wrapper with `line 270: -c: command not found` **after** its result had printed
+  correctly; and a hold loop whose done-condition matched the echoed command
+  rather than its output, reporting a fifty-minute compile complete on its first
+  tick.
+
+---
+
 ### 2026-08-28T13:30:00Z: the session teardown becomes a command, not a promise
 
 **Record:** `RULES.md` decisions 9 and 10 and its rewritten end protocol;
