@@ -105,6 +105,27 @@ that before quoting them.
 says so, and a session that reads "it is the block size" as settled has read the
 headline and not the caveat.
 
+### ⛔ Correction, 2026-08-28: rows two and three are withdrawn, and this review missed why
+
+⚠ **This table asked the right question of every row and got one of them
+wrong.** Rows two and three both rest on the same `tar` control, and the column
+they were scored in is "could the instrument produce this if the claim were
+false". ⛔ **The answer given was no. The right answer was yes**, and the reason
+is not about the instrument at all: **the control was run once.**
+
+⭐ **Repeated on 2026-08-28, that `tar` finishes in about half a minute**, on the
+same image, through the plain driver and through the instrument that took the
+original reading. ⛔ So `pkg_add` is not exonerated, the filesystem is, and
+[`../inf-09.md`](../inf-09.md) carries the wording and the four controls that
+replaced it.
+
+⚠ **The last row survived, and it survived because it was labelled.** It said
+nothing establishes causation, and nothing did. ⭐ **The rows that failed are the
+two that were scored as settled**, which is the same shape as the finding in
+[`15-somebody-who-started-building-on-last-sessions-answer.md`](15-somebody-who-started-building-on-last-sessions-answer.md):
+a qualifier is lost on the way up to a headline, and a review that checks the
+instrument does not catch a control that was never repeated.
+
 ---
 
 ## ⛔ What this review did NOT look at
