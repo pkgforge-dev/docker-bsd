@@ -21,6 +21,39 @@ entry. A superseded one is amended in place with a dated note.
 
 ## 2026-08-28
 
+### 2026-08-28T08:00:00Z: read nine more projects, and one of them explained the bug
+
+**Record:** the fourth sweep in
+[`HISTORY/references/findings.md`](HISTORY/references/findings.md) and
+[`HISTORY/references/usable.md`](HISTORY/references/usable.md); `INF-09` in
+[`TODO/infrastructure.md`](TODO/infrastructure.md), corrected in place;
+`RULES.md` decisions 7 and 8.
+**Deployed:** ⛔ **no.** No image was built or published.
+
+⛔ **The first three reference sweeps were being carried and not read.** Every
+citation to them outside `HISTORY/` had arrived in the first commit, and exactly
+one later session had drawn on one. ⚠ **A session had hand-written a
+provisioning mechanism that upstream already ships.**
+
+- ⭐ **Nine references mined**, taking the total to 37: `ppkg`, its build
+  workflows, `cross-platform-actions/action`, `cross-rs/cross` and
+  `cross-toolchains`, `smolBSD` re-mined, `sailor`,
+  `nextbsd-kernel-toolchain` and `mussel`.
+- ⛔ **`INF-09` corrected at the source line.** smolBSD writes ext2 only when
+  the BUILD HOST is Linux, and only for the BUILDER image, which this
+  repository ships as its runtime root.
+- ⭐ **`PERF-02`'s user A is now a named command**: `apt install clang lld` plus
+  the BSD's own `base` and `comp` sets. No BSD host, no VM. ⚠ `scripts/sources`
+  fetches `base` and `etc`, not `comp`.
+- ⛔ **A `docs/LIMITS.md` claim narrowed for the third time.** A free runner's
+  QEMU does get KVM; a rootless container on one does not.
+- ⛔ **DragonFly dropped.** The working route and its three traps are kept in
+  [`HISTORY/dragonfly.md`](HISTORY/dragonfly.md).
+- ⭐ **Three deep reviews**, including review 7 re-run against evidence it did
+  not have: the alternative to this project got cheaper.
+
+---
+
 ### 2026-08-28T05:30:00Z: the slow step has a cause, and the research nobody read now reaches the work
 
 **Record:** `INF-09` in [`TODO/infrastructure.md`](TODO/infrastructure.md), with

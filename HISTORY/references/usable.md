@@ -804,3 +804,322 @@ wrong defect.
   banner, the root mount and the start of `rc`, so the next run reports where
   the time goes instead of attributing it.
 - ⚠ **Nothing here tested arm64**, and the artefacts used are `amd64` only.
+
+---
+
+# ⭐ Fourth sweep, 2026-08-28: the commands
+
+⛔ **This half is the one a later session acts on.** The verdicts and the
+reasoning are in [`findings.md`](findings.md), the fourth-sweep section.
+⚠ Nothing below was run here: it is transcribed from source that was opened, at
+the commits in that file's provenance table.
+
+---
+
+## ⭐ `R29` ppkg: cross-compile for a BSD from Linux, with stock clang
+
+⛔ **This is `PERF-02`'s user A and this repository does not have it.** No BSD
+host, no VM, no GCC cross toolchain built from source.
+
+### The whole toolchain, on a free runner
+
+```bash
+sudo apt -y update && sudo apt -y install clang lld
+```
+
+⭐ **Two packages.** `R30`'s `manually-build-for-bsd.yml` does exactly this.
+
+### The sysroot is the BSD's own published sets
+
+```bash
+# FreeBSD
+curl -fsSLo base.txz "https://archive.freebsd.org/old-releases/amd64/15.1-RELEASE/base.txz"
+bsdtar xvf base.txz -C "$SYSROOT"
+```
+
+```bash
+# NetBSD, and OpenBSD is the same shape with base/comp NN.tgz
+for item in base comp
+do
+  curl -fsSLo "$item.tar.xz" "https://ftp.netbsd.org/pub/NetBSD/NetBSD-10.1/amd64/binary/sets/$item.tar.xz"
+  bsdtar xvf "$item.tar.xz" -C "$SYSROOT"
+done
+```
+
+⛔ **`comp` is not optional and this repository does not fetch it.**
+`scripts/sources` takes `base.tar.xz` and `etc.tar.xz` for NetBSD; the headers
+and static libraries a cross build needs are in **`comp`**. ⭐ Confirmed
+independently by `R32`, which fetches the same two sets.
+
+⚠ **NetBSD's mirror depends on the release**: 1.x to 9.2 are on
+`archive.netbsd.org/pub/NetBSD-archive`, later ones on `ftp.netbsd.org/pub/NetBSD`.
+
+### ⭐ The libc differences, papered over with linker scripts named `.a`
+
+⛔ **The single most reusable trick in this sweep.** A GNU-ld script in a file
+called `libfoo.a` redirects the linker without any archive existing.
+
+```sh
+# OpenBSD folds these into libc
+printf '%s\n' 'INPUT(-lc)'                    > "$SYSROOT/usr/lib/libdl.a"
+printf '%s\n' 'INPUT(-lc)'                    > "$SYSROOT/usr/lib/librt.a"
+printf '%s\n' 'INPUT(-lc)'                    > "$SYSROOT/usr/lib/libcrypt.a"
+printf '%s\n' 'INPUT(-lc++)'                  > "$SYSROOT/usr/lib/libstdc++.a"
+printf '%s\n' 'INPUT(-lcompiler_rt -lc++abi)' > "$SYSROOT/usr/lib/libgcc.a"
+printf '%s\n' 'INPUT(-lcompiler_rt -lc++abi)' > "$SYSROOT/usr/lib/libgcc_s.a"
+```
+
+```sh
+# NetBSD wants a different set
+printf '%s\n' 'INPUT(-lstdc++)' > "$SYSROOT/usr/lib/libc++.a"
+printf '%s\n' 'INPUT(-lc)'      > "$SYSROOT/usr/lib/libdl.a"
+printf '%s\n' 'INPUT(-lgcc_eh)' > "$SYSROOT/usr/lib/libgcc_s.a"
+```
+
+```sh
+# FreeBSD: remove its libgcc.a first, then redirect
+rm "$SYSROOT/usr/lib/libgcc.a"
+printf '%s\n' 'INPUT(-lc++)'                  > "$SYSROOT/usr/lib/libstdc++.a"
+printf '%s\n' 'INPUT(-lcompiler_rt -lgcc_eh)' > "$SYSROOT/usr/lib/libgcc.a"
+printf '%s\n' 'INPUT(-lcompiler_rt -lgcc_eh)' > "$SYSROOT/usr/lib/libgcc_s.a"
+```
+
+### ⭐ OpenBSD ships no unversioned `.so` symlinks. Make them generically
+
+```sh
+cd "$SYSROOT/usr/lib"
+for f in lib*.so.*
+do
+	ln -s "$f" "${f%.so.*}.so"
+done
+```
+
+⛔ **`R32` does this by hand, naming `libc.so.12.213` and friends**, which is
+why it is pinned to NetBSD 9.3 and cannot be bumped. Three generic lines beat a
+hand-maintained list.
+
+### Invoking it
+
+```sh
+CLANG_TARGET="amd64-unknown-freebsd"     # or -openbsd, -netbsd
+CFLAGS="--target=$CLANG_TARGET --sysroot=$SYSROOT"
+LDFLAGS="-fuse-ld=lld"                   # ⛔ REQUIRED for FreeBSD
+```
+
+⚠ **`-fuse-ld=lld` is not a preference for FreeBSD**, it is a workaround `ppkg`
+cites `llvm/llvm-project#74917` for. ⚠ And `ppkg` disables LTO outright whenever
+it is cross compiling.
+
+⚠ **C++ headers need finding by hand**: `ppkg` probes `$SYSROOT/usr/include/c++/v1`
+then `$SYSROOT/usr/include/g++` and adds whichever exists with `-I`.
+
+---
+
+## ⛔ `R31` cross-platform-actions: a BSD guest, on a free runner, WITH KVM
+
+⭐ **This is the correction to a claim in [`../../docs/LIMITS.md`](../../docs/LIMITS.md).**
+A free runner's `/dev/kvm` is usable by a QEMU process running **on the runner**.
+⛔ This repository measured that it is NOT usable from inside a **rootless
+container**, which is a different question.
+
+```yaml
+- uses: cross-platform-actions/action@v1.4.0   # ⛔ pin a commit, not @master
+  with:
+    operating_system: netbsd     # freebsd | openbsd | netbsd
+    version: '10.1'
+    shell: bash
+    run: uname -a
+```
+
+### ⛔ The CPU features that stop a BSD guest booting, and this repository is exposed
+
+⭐ **Mask these when the guest sees the host CPU.**
+
+```text
+-cpu host,amx-tile=off,amx-int8=off,amx-bf16=off,la57=off,stibp-always-on=off
+```
+
+| feature | what it does to a BSD guest |
+| --- | --- |
+| ⛔ **AMX** | adds 8 KB of tile registers to the kernel's CPU-state save area. Kernels older than AMX size it from CPUID and fault as soon as userland starts. ⛔ **NetBSD jumps to address 0 while starting init.** FreeBSD panics in `vm_fault` |
+| ⛔ **`la57`** | 5-level paging. FreeBSD 13.0 panics in the trampoline that switches to it |
+| ⚠ **`stibp-always-on`** | reported by some AMD runners without STIBP and IBRS. DragonFly writes `IA32_SPEC_CTRL` and KVM answers with a general protection fault |
+
+⛔ **`images/netbsd/guest.py` uses `-cpu host,+invtsc` on its KVM path.** ⚠ It
+has never run accelerated on a runner, so this has not bitten yet; **it will the
+day it does, on any Sapphire Rapids or Emerald Rapids runner.** The hunt is in
+`cross-platform-actions/action#158`, where a reporter restarted a job 16 times
+to correlate it with `/proc/cpuinfo`.
+
+### ⭐ Two smaller mechanisms worth taking
+
+```text
+-machine type=microvm,accel=kvm:tcg
+```
+
+⭐ **QEMU takes a colon-separated accelerator fallback list natively.** This
+repository open-codes it as a boot-and-retry loop in `guest.py`. ⚠ **The trade
+is real**: the retry loop is what lets the image REPORT which accelerator it
+actually got, which `docs/LIMITS.md` treats as load bearing. Taking the colon
+list would remove that report.
+
+```text
+-drive if=none,file=$IMG,id=drive0,cache=unsafe,discard=ignore,format=raw
+```
+
+⚠ **`cache=unsafe` ignores flushes.** For a throwaway guest that is a legitimate
+trade, and it is a candidate lever the moment `PERF-02` says IO is stuck.
+
+---
+
+## ⭐ `R30`: `PERF-02`'s matrix, and what is wrong with it for our purpose
+
+`manually-build-for-bsd.yml` runs the same package two ways on the same free
+runner, selected by one boolean input:
+
+```yaml
+  cross:
+    if: ${{ github.event.inputs.cross-compiling == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt -y install clang lld
+      - run: ./ppkg install freebsd-15.1/PACKAGE --profile=release
+
+  native:
+    if: ${{ github.event.inputs.cross-compiling != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cross-platform-actions/action@master
+        with: { operating_system: freebsd, version: '15.1' }
+```
+
+⛔ **Two different jobs.** This repository has measured a **42 percent** spread
+between jobs on a free runner, so a ratio across them cannot see `PERF-03`'s
+5 percent gate. ⭐ **Take the shape and put both sides in ONE job.**
+
+⚠ **A BSD guest has no CA bundle.** Fetch one and point at it:
+
+```bash
+curl -LO https://curl.se/ca/cacert.pem
+export SSL_CERT_FILE="$PWD/cacert.pem"
+```
+
+---
+
+## ⭐ `R36`: cross-build FreeBSD's own kernel toolchain, from Ubuntu
+
+```dockerfile
+ENV MAKEOBJDIRPREFIX=/usr/obj
+ENV CROSS_BINDIR=/usr/lib/llvm-19/bin
+RUN git clone --depth 1 --branch releng/15.1 <freebsd-src> /usr/src
+RUN cd /usr/src && ./tools/build/make.py \
+        --cross-bindir="${CROSS_BINDIR}" \
+        TARGET=amd64 TARGET_ARCH=amd64 kernel-toolchain -j"$(nproc)"
+```
+
+⛔ **Four things that will otherwise cost a day each:**
+
+- **`MAKEOBJDIRPREFIX` must be in the ENVIRONMENT.** The build refuses it as a
+  make argument.
+- ⛔ **Shallow is fine; SPARSE is what breaks it.** `kernel-toolchain` needs
+  `share/mk`, `tools/build`, `usr.bin/`, `gnu/` and `lib/`. A sys-only tree
+  fails.
+- ⚠ **Ubuntu 24.04 ships clang-18; FreeBSD 15.1 wants clang-19.** Add
+  `apt.llvm.org`.
+- ⛔ **`WITH_CCACHE_BUILD` does not wrap an external `XCC`.** Build a parallel
+  bindir of symlinks and route `clang` and `clang++` through `ccache` yourself.
+
+---
+
+## ⛔ `R34` smolBSD, re-mined: the two lines that explain `INF-09`
+
+⭐ **The filesystem is chosen by the BUILD HOST, not by the guest.**
+`mkimg.sh:155`:
+
+```text
+if [ -n "$is_linux" ]; then
+	# no other image than builder image are ext2, don't check for FROMIMG
+	mke2fs -O none ${vnd}
+```
+
+⛔ **So ext2 with no features is what you get when smolBSD is built on Linux**,
+and only for the **builder** image. On a NetBSD or FreeBSD build host the same
+script runs `newfs` and produces FFS.
+
+⚠ **This repository ships `build-amd64.img`, which is that builder image**, as
+the runtime root, grown with `resize2fs`. `INF-09` is the consequence.
+
+### ⭐ How upstream provisions: a chroot, not a booted guest
+
+`smoler/build.sh:245` turns a `RUN` line into:
+
+```sh
+chroot . su ${USER} -c "cd ${WORKDIR} && <the command>"
+```
+
+written into a `postinst` script that refuses to run outside the builder image.
+⛔ **This repository types at a serial console instead.**
+
+### ⭐ And the answer to `IMG-03`, in upstream's own file
+
+```dockerfile
+FROM base,etc
+LABEL smolbsd.service=caddy
+LABEL smolbsd.minimize=y
+LABEL smolbsd.publish="8881:8880"
+RUN pkgin up && pkgin -y in caddy
+EXPOSE 8880
+CMD caddy respond -l :8880
+```
+
+⚠ **A `Dockerfile` has no port mapping**, so upstream put it in a `LABEL`.
+⭐ `smolbsd.minimize=y` shrinks an image to its actual content, which is the
+opposite operation from growing it.
+
+---
+
+## ⚠ `R37` mussel: the Linux cross toolchain, when one is needed
+
+```bash
+git clone --depth 1 https://github.com/firasuke/mussel.git
+cd mussel && ./check && ./mussel x86_64
+```
+
+⛔ **musl targets only. No BSD target exists and none is planned.**
+[`../../TODO/RULES.md`](../../TODO/RULES.md) decision 8. ⭐ Its use here is
+`OPT-02`: a static emulator for a `scratch` base needs a musl cross toolchain,
+and this is the ruled way to build one.
+
+---
+
+## ⛔ `R29` mechanisms worth stealing that are not about BSD at all
+
+### Force static linking through a compiler shim
+
+`core/wrappers/wrapper-target-cc.c` rewrites the link line before `execv`:
+
+| what it sees | what it substitutes |
+| --- | --- |
+| `-rdynamic`, `-Wl,--export-dynamic`, `-Wl,-Bdynamic`, `-pie` | `-static` |
+| an absolute `/path/libfoo.so` | ⭐ `/path/libfoo.a`, **and `stat`s it first**, falling back to `.so` when no archive exists |
+| `/path/libm.so`, `/path/libdl.so` | `-lm`, `-ldl`, because glibc ships no static archive for them |
+
+⭐ **The `stat` is the part that makes it safe.** A rewrite that assumes the
+`.a` exists produces a link error naming a file nobody asked for.
+
+### Read an ELF without binutils
+
+`core/elftools/*.c` use `pread` and `<elf.h>` alone, with separate 32-bit and
+64-bit paths, to answer: has a dynamic section, what is the interpreter, what is
+`DT_NEEDED`, `DT_SONAME`, `DT_RPATH`. ⛔ **No `readelf` and no libelf**, which
+matters when the host's binutils do not understand the target.
+
+⚠ **They include `<elf.h>`**, which is a glibc and musl header. Whether they
+build on a BSD was not tested here.
+
+### Identify a file from 18 bytes
+
+`core/file-magic.c` prints a hex prefix of the first 6 bytes, having first
+spliced `e_type` into positions 4 and 5 for an ELF, with the byte order taken
+from `e_ident[EI_DATA]`. ⭐ One string answers both "is this an ELF" and "what
+kind of ELF".

@@ -13,7 +13,7 @@ does not get adopted.
 
 ### ⭐ Prior art already read, and it is in this repository
 
-⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+⛔ **37 projects have been mined, in four sweeps, with their trackers.**
 [`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
 verdicts and the ranking;
 [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
@@ -23,8 +23,9 @@ once and is recorded under `INF-09`.
 
 | the entry | read, by section |
 | --- | --- |
-| `OPT-02`, a purpose-built emulator | ⭐ `findings.md`, the `R18` `anyvm` verdict: which QEMU accelerator paths exist per host, and ⛔ that **Windows QEMU ships WHPX in `qemu-system-x86_64.exe` only** |
+| `OPT-02`, a purpose-built emulator | ⭐ `findings.md`, the `R18` `anyvm` verdict: which QEMU accelerator paths exist per host, and ⛔ that **Windows QEMU ships WHPX in `qemu-system-x86_64.exe` only**. ⭐ For the toolchain to build a static one, `usable.md`'s `R37` section and [`RULES.md`](RULES.md) decision 8 |
 | `OPT-03`, is a VM the right shape | ⭐ `usable.md`, the `R26` `bsdkrun` section, which is an OCI image booted as a microVM on `libkrun` and the closest published thing to this repository's shape, plus `R11` and `R13` for Firecracker. ⛔ And `findings.md`'s `R28` verdict, which is why "no virtual machine at all" is already a dead row here |
+| ⭐ **`PERF-02`, the whole matrix** | `usable.md`, the `R30` section. ⛔ **The A-versus-B workflow already exists**: one file, a `cross-compiling` input, `apt install clang lld` on one side and a real BSD VM on the other, both on `ubuntu-latest`. ⚠ **They are in two different JOBS**, which this repository's own 42 percent between-job variance makes unusable as a ratio. Take the shape, put both in one job |
 | `PERF-02`, a real build in a guest | ⛔ `usable.md`'s `honest-limit` row on `mount_psshfs`: a parallel build over it reads back **truncated object files**. Any benchmark that shares a source tree that way is measuring corruption |
 
 ---

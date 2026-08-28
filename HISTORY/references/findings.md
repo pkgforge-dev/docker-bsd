@@ -826,3 +826,345 @@ says the universal option is possible on `x86_64` and impossible on arm64.
   more in it than one pass finds.
 - ⚠ **The 11 remaining `vmactions` BSD repositories were listed, not
   harvested.** They are the same generated shape as the six that were.
+
+---
+
+# ⭐ Fourth sweep, 2026-08-28: build tooling, cross toolchains and smolBSD re-mined
+
+⛔ **Read [`../../docs/methodology/references.md`](../../docs/methodology/references.md)
+first.** This sweep took every step of it, including the clone-and-capture and
+the tracker pass, and says below which passes it did **not** take.
+
+⚠ **Why this sweep happened at all.** The operator observed on 2026-08-28 that
+the previous three sweeps were being carried and not read: every citation to
+them outside `HISTORY/` had arrived in the first commit, and exactly one later
+session had drawn on them. ⛔ **That is recorded as the defect it is** in
+[`../reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md`](../reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md).
+
+## Provenance
+
+⭐ **All nine were cloned shallow and the commit captured before anything was
+read**, per the method. ⛔ **Nothing was delegated to a sub-agent**, per trap 6.
+
+| # | reference | HEAD read | tracker pulled | depth |
+| --- | --- | --- | --- | --- |
+| R29 | `leleliu008/ppkg` | `593700498b32` | 17 items | ⭐ **every `.c` file read in full** (24 files, all under 500 LOC); `ppkg`, 11,916 lines of POSIX shell, grepped and read at the BSD and cross paths |
+| R30 | `leleliu008/ppkg-package-manually-build` | `9e1d57006d0a` | 4 items | ⭐ **the BSD workflow files read in full** |
+| R31 | `cross-platform-actions/action` | `b77f08480307` | ⭐ `#158` in full, all comments | source read: `qemu_vm.ts`, `x86_64.ts` |
+| R32 | `cross-rs/cross` | `8c1a8aa4b661` | ⭐ BSD-filtered search, 20 items; `#1412` in full | `docker/netbsd.sh` and `freebsd-common.sh` in full, `targets.toml` |
+| R33 | `cross-rs/cross-toolchains` | `7e3343bfccde` | 72 items | tree listed |
+| R34 | `NetBSDfr/smolBSD` | `0824f4ee04fc` | 83 items | ⭐ **re-mined**, per trap 7. `mkimg.sh` and `smoler/build.sh` read at the filesystem and `RUN` paths |
+| R35 | `NetBSDfr/sailor` | `5a6be11c45e1` | 17 items | README, tracker |
+| R36 | `nextbsd-redux/nextbsd-kernel-toolchain` | `a04b0c7cf467` | 8 items | ⭐ **`Dockerfile.amd64` read in full** |
+| R37 | `firasuke/mussel` | `341735f6f65a` | 50 items | README and the architecture list; `mussel`, 1,166 lines, not read line by line |
+
+### ⛔ What was NOT done
+
+- ⚠ **`ppkg`'s 11,916-line driver was not read end to end.** It was grepped
+  thoroughly and read in full at the BSD sysroot builders, the toolchain
+  selection and the wrapper generation. ⛔ **Grep locates, it does not confirm**
+  (trap 4), so every claim below is cited at a line that was opened.
+- ⚠ **`mussel` was classified from its README and architecture list**, not from
+  its source. It has no BSD target, so a source pass would answer a question
+  nobody here is asking.
+- ⚠ **`cross-rs/cross`'s tracker was searched, not enumerated.** It has
+  thousands of items; the BSD-filtered search returned 20 and those were read.
+- ⛔ **Nothing was built or run.** Every verdict is from published artefacts,
+  source and trackers. No cross toolchain was exercised here.
+- ⚠ **`R33` got one pass**, because it turned out to contain no BSD target at
+  all and there was no second question to ask of it.
+
+---
+
+## ⭐ The ranking
+
+| rank | reference | class | what it is worth |
+| --- | --- | --- | --- |
+| **1** | `R34` smolBSD, re-mined | Pre | ⛔ **It corrects `INF-09`'s premise at the source line.** ext2 is not a design choice about the guest; it is what smolBSD falls back to when the BUILD HOST is Linux |
+| **2** | `R29` ppkg | Pre | ⭐ **Cross-compiles for all three BSDs from Linux with stock clang and the BSD's own published sets.** No BSD host, no VM. This is `PERF-02`'s user A, built and working |
+| **3** | `R31` cross-platform-actions | Pre | ⛔ **A free runner DOES get KVM**, and a NetBSD guest with host CPU passthrough dies on AMX runners. Both measured, in a tracker |
+| **4** | `R30` ppkg-package-manually-build | Pre | ⭐ **`PERF-02`'s matrix already exists**: one workflow, cross versus native, same runner |
+| **5** | `R36` nextbsd-kernel-toolchain | Pre | ⭐ Third independent confirmation that stock apt clang cross-builds FreeBSD, and it does the **kernel** toolchain |
+| **6** | `R32` cross-rs/cross | Post | ⚠ The comparison, and a warning: its BSD targets carry a standing list of unfixed defects, and its own maintainer calls the sysroot approach broken |
+| **7** | `R37` mussel | Post | The Linux cross toolchain, ruled in by the operator. ⛔ No BSD target |
+| **8** | `R35` sailor | Misc | ⚠ smolBSD's chroot provisioner. Last substantive activity 2017 |
+| **9** | `R33` cross-toolchains | Misc | ⛔ **No BSD target at all.** Recorded so nobody mines it again |
+
+---
+
+## The verdicts
+
+### `R34`, smolBSD re-mined: ⭐ adopt, and it corrects a premise this repository built on
+
+⛔ **Same commit as the third sweep, `0824f4ee04fc`.** Trap 7 says re-mine
+anyway; the value here is that the previous verdict is now known to have been
+taken against exactly this code, and that the code says something the previous
+read did not extract.
+
+⭐ **`mkimg.sh` lines 155 to 167 are the correction.** The filesystem is chosen
+by **the build host**, not by the guest:
+
+```text
+if [ -n "$is_linux" ]; then
+	# no other image than builder image are ext2, don't check for FROMIMG
+	mke2fs -O none ${vnd}
+	mountfs="ext2fs"
+elif [ -n "$is_freebsd" ]; then
+	newfs -o time -O1 -m0 /dev/${mountdev}
+	mountfs="ffs"
+else # NetBSD
+	newfs -O1 -m0 /dev/${mountdev}
+	mountfs="ffs"
+```
+
+⛔ **Three things follow, and all three change `INF-09`:**
+
+1. **ext2 exists because a Linux host cannot `newfs` an FFS.** It is a
+   build-host fallback, not a property of smolBSD guests.
+2. ⛔ **The comment says only the BUILDER image is ext2.** This repository took
+   `build-amd64.img`, which is that builder, and made it the runtime root.
+3. ⛔ **`mke2fs -O none`** is literally "no features", which is exactly what
+   `dumpe2fs` reported when `INF-09` finally read the geometry. ⭐ **The
+   filesystem `INF-09` is stuck on is generated at that line.**
+
+⚠ **And upstream has already hit ext2 trouble of its own**: `mkimg.sh:319`
+carries the comment `unionfs with ext2 leads to i/o error`.
+
+⭐ **`RUN` is a chroot, not a booted guest.** `smoler/build.sh:245` emits
+`chroot . su ${USER} -c "cd ${WORKDIR} && ..."` into a `postinst` script guarded
+by a check that it is running inside the builder image (lines 96 to 105).
+⛔ **This repository drives a serial console instead**, which is the mechanism
+`INF-09` is about.
+
+⭐ **And `IMG-03` has an upstream answer**: `smolerfiles/Dockerfile.caddy`
+carries `LABEL smolbsd.publish="8881:8880"` with a comment saying a Dockerfile
+has no port mapping, plus `LABEL smolbsd.minimize=y` for shrinking an image to
+its content.
+
+### `R29`, ppkg: ⭐ adopt, and it is the answer to `PERF-02`'s user A
+
+A portable package builder in 11,916 lines of POSIX shell, with a parallel C
+implementation on another branch. ⛔ **It cross-compiles for FreeBSD, OpenBSD
+and NetBSD from a Linux host with stock clang**, and the whole mechanism is
+about seventy lines.
+
+⭐ **The sysroot is the BSD's own published sets**, `ppkg` lines 5258 to 5334:
+`base.txz` for FreeBSD from `archive.freebsd.org/old-releases`, and **`base` AND
+`comp`** for OpenBSD and NetBSD. ⚠ **`comp` is the set carrying headers and
+static libraries**, and this repository's `scripts/sources` fetches `base` and
+`etc` only.
+
+⭐ **The toolchain is one clang and N sysroots**, lines 7782 to 7788:
+
+```sh
+CLANG_TARGET="$TARGET_PLATFORM_ARCH-unknown-$TARGET_PLATFORM_NAME"
+WRAPPER_TARGET_BASEFLAGS="--target=$CLANG_TARGET $WRAPPER_TARGET_BASEFLAGS"
+```
+
+with `--sysroot=$SYSROOT`, and `-fuse-ld=lld` **required for FreeBSD**, citing
+`llvm/llvm-project#74917`. ⚠ `ENABLE_LTO=0` whenever cross compiling.
+
+⭐ **The BSD libc differences are papered over with linker scripts written as
+`.a` files**, which is the single most reusable trick here:
+
+```sh
+printf '%s\n' 'INPUT(-lc)'                    > libdl.a
+printf '%s\n' 'INPUT(-lc)'                    > librt.a
+printf '%s\n' 'INPUT(-lc++)'                  > libstdc++.a
+printf '%s\n' 'INPUT(-lcompiler_rt -lc++abi)' > libgcc.a
+```
+
+⭐ **And OpenBSD's missing unversioned symlinks are made generically**, which is
+the fix `R32` does by hand and gets wrong:
+
+```sh
+for f in lib*.so.*
+do
+	ln -s "$f" "${f%.so.*}.so"
+done
+```
+
+⛔ **The compiler wrapper is a 444-line C shim**,
+`core/wrappers/wrapper-target-cc.c`. It classifies the invocation into five
+actions by scanning `argv`, injects `WRAPPER_TARGET_CCFLAGS` and
+`WRAPPER_TARGET_LDFLAGS` from the environment, and **rewrites the link line to
+force static linking**: `-rdynamic`, `-Wl,--export-dynamic`, `-Wl,-Bdynamic` and
+`-pie` all become `-static`. ⭐ **Its best trick is rewriting an absolute `.so`
+path to `.a` and then `stat`ing the result**, falling back to `.so` when no
+static archive exists (lines 232 to 256), with `libm.so` and `libdl.so`
+special-cased to `-lm` and `-ldl` because glibc ships no static archive for
+them.
+
+⭐ **The ELF tools are dependency-free readers.** `core/elftools/*.c` read
+`Elf32_Ehdr` and `Elf64_Ehdr` with `pread` and `<elf.h>` alone, with separate
+32-bit and 64-bit paths. ⛔ **No `readelf`, no `objdump`, no libelf**, which is
+the point when the host's binutils do not understand the target. ⚠ The three
+roughly 400-line siblings differ by 8 or 9 lines each: the `d_tag` compared and
+a buffer size.
+
+⭐ **`core/file-magic.c` is a 107-line trick worth stealing**: it reads the
+first 18 bytes and, for an ELF, splices `e_type` into the printed prefix with
+the endianness taken from `e_ident[EI_DATA]`, so one hex string identifies both
+"is this an ELF" and "what kind".
+
+### ⛔ `R29` anti-pattern exhibit: the guard exists and is not wired up
+
+⭐ **`ppkg#17`, open, filed by this repository's own operator**: `--static` does
+not verify that what it produced is actually static, and the tool already ships
+`core/elftools/check-if-has-dynamic-section.c`, which is exactly the check.
+
+> "I want my build to fail if it can't be statically linked... currently, some
+> user has to manually download & run it only to find that it's not at all
+> static"
+
+⛔ **A check that exists in the tree and is not run by the thing it would guard
+is the same class this repository calls theatre.** Kept as an exhibit because
+this repository is one refactor away from the same shape.
+
+### `R31`, cross-platform-actions: ⭐ adopt, and it corrects a claim in `docs/LIMITS.md`
+
+⛔ **A free GitHub runner DOES give a QEMU process working KVM.** The
+maintainer, in `#158`: hardware accelerated virtualization is enabled and the
+host CPU is exposed to the guest. ⚠ **This repository's measurement that
+`/dev/kvm` cannot be opened was taken INSIDE a rootless container**, which is a
+different question, and `LIMITS.md` now says which.
+
+⛔ **And a NetBSD guest dies on runners with AMX.** `#158` is a full worked
+hunt: the reporter restarted a job **16 times**, correlating failures with
+`/proc/cpuinfo`. It hung on `INTEL(R) XEON(R) PLATINUM 8573C` and ran on
+`AMD EPYC 7763`. ⚠ **The maintainer's first hypothesis came from asking an AI
+and was not the evidence**; restarting 16 times was.
+
+⭐ **The fix is a CPU feature mask**, `src/architectures/x86_64/x86_64.ts:43`,
+and its comment is a measured trap list this repository should not have to
+rediscover:
+
+```ts
+return ['amx-tile=off', 'amx-int8=off', 'amx-bf16=off',
+        'la57=off', 'stibp-always-on=off']
+```
+
+- **AMX** adds 8 KB of tile registers to the kernel's CPU-state save area.
+  Kernels older than AMX size that area from what the CPU reports and fault as
+  soon as userland starts: ⛔ **NetBSD jumps to address 0 while starting init;
+  FreeBSD panics in `vm_fault`.**
+- **`la57`**, 5-level paging, makes FreeBSD 13.0 panic in the trampoline that
+  switches to it.
+- **`stibp-always-on`** reported without the STIBP and IBRS bits makes DragonFly
+  write `IA32_SPEC_CTRL` and take a general protection fault from KVM.
+
+⭐ **Two smaller mechanisms.** `-machine type=q35,accel=hvf:kvm:tcg`: QEMU
+takes a **colon-separated accelerator fallback list natively**, which this
+repository open-codes as a boot-and-retry loop. And `cache=unsafe` on every
+drive, which for a throwaway VM trades durability for write speed.
+
+### `R30`: ⭐ adopt. `PERF-02`'s matrix, already written by somebody else
+
+`manually-build-for-bsd.yml` is one workflow with a `cross-compiling` input and
+two mutually exclusive jobs:
+
+- **`cross`**: `runs-on: ubuntu-latest`, `sudo apt -y install clang lld`, then
+  `ppkg install freebsd-15.1/PACKAGE`. ⭐ **Two apt packages is the whole cross
+  toolchain.**
+- **`native`**: `runs-on: ubuntu-latest` plus `cross-platform-actions/action`,
+  building inside a real BSD VM on the same free runner.
+
+⛔ **They are in DIFFERENT JOBS**, which by this repository's own measured
+42 percent between-job variance makes a ratio across them meaningless. ⭐ **So
+the shape is right and the placement is wrong for our purpose**: the same two
+sides have to run in one job.
+
+⚠ **Two smaller notes.** `SSL_CERT_FILE` is pointed at a `cacert.pem` fetched
+from `curl.se` first, because the BSD guests have no CA bundle. And
+⛔ **`uses: cross-platform-actions/action@master`**, unpinned, which this
+repository's own convention forbids.
+
+### `R36`, nextbsd-kernel-toolchain: ⭐ adopt the mechanism, and it is the strongest confirmation
+
+⛔ **It cross-builds FreeBSD's own kernel toolchain from `ubuntu:24.04`**, with
+stock apt clang and lld, and no BSD anywhere:
+
+```dockerfile
+ENV MAKEOBJDIRPREFIX=/usr/obj
+ENV CROSS_BINDIR=/usr/lib/llvm-19/bin
+RUN cd /usr/src && ./tools/build/make.py \
+        --cross-bindir="${CROSS_BINDIR}" \
+        TARGET=amd64 TARGET_ARCH=amd64 kernel-toolchain -j"$(nproc)"
+```
+
+⭐ **Four traps in its own comments, each worth the read:**
+
+- ⛔ **`MAKEOBJDIRPREFIX` must be in the environment**; the build refuses it as
+  a make argument.
+- ⛔ **A shallow clone is fine and a sparse one is not.** `kernel-toolchain`
+  needs `share/mk`, `tools/build`, `usr.bin/`, `gnu/` and `lib/`; a sys-only
+  tree fails.
+- ⚠ **Ubuntu 24.04 ships clang-18 and FreeBSD 15.1 needs clang-19**, so
+  `apt.llvm.org` is added. Some modules need Clang 19 builtins.
+- ⛔ **FreeBSD's `WITH_CCACHE_BUILD` does not wrap an external `XCC`**, so it
+  builds a parallel bindir of symlinks with `clang` and `clang++` routed through
+  `ccache` by hand.
+
+### `R32`, cross-rs/cross: ⚠ the comparison, and a warning
+
+⛔ **It takes the opposite approach to `R29` and its own maintainer says it is
+broken.** `docker/netbsd.sh` builds a full GCC 9.4.0 and binutils 2.36.1 cross
+toolchain from source, patched with three pkgsrc patches fetched from
+`ftp.netbsd.org`, then hand-copies specific versioned libraries:
+
+```sh
+cp "${td}/netbsd/lib/libc.so.12.213" "${destdir}/lib"
+cp "${td}/netbsd/lib/libm.so.0.12" "${destdir}/lib"
+ln -s libc.so.12.213 "${destdir}/lib/libc.so"
+```
+
+⛔ **Those exact filenames are why it is pinned to NetBSD 9.3 and not bumped.**
+⭐ `R29` does the same job in three generic lines.
+
+⛔ **`#1412`, open, is the confession.** Its own author:
+
+> "Until now the sysroot took in base.txz only the bare minimum to get cross gcc
+> to build, by copying selectively a small number of libs into otherwise
+> non-standard paths... This is a problem for clang, used by rust-bindgen,
+> because the libs and headers were now in non-standard locations."
+
+⚠ The PR proposes exactly `R29`'s approach, keeping the sysroot as close to
+upstream base as possible, and ends by reporting that the gcc build then fails.
+⛔ **Still open.**
+
+⚠ **Its BSD targets carry a standing defect list**: `#1291` cmake projects
+cannot be compiled for FreeBSD, `#1563` and `#1564` `-Zbuild-std` link errors
+for both FreeBSD and NetBSD, `#1744` pkg-config reporting the wrong prefix. All
+open.
+
+⭐ **It confirms one thing independently**: NetBSD needs **`base` and `comp`**,
+same as `R29`.
+
+### `R37`, mussel: ⚠ adopt when a Linux cross toolchain is needed, and only then
+
+1,166 lines of POSIX shell that builds a musl-targeting cross compiler, across
+about thirty architectures, running under `dash`. ⛔ **There is no BSD target
+and there is not meant to be.** [`../../TODO/RULES.md`](../../TODO/RULES.md)
+decision 8.
+
+⭐ **Where it actually bears on this repository is `OPT-02`**, which wants a
+purpose-built emulator on `scratch`. A static QEMU needs a musl cross toolchain,
+and this is the operator's ruled choice for building one.
+
+### `R35`, sailor: **filed elsewhere**
+
+A chroot-and-`pkgin` portable container system for NetBSD, Darwin and RHEL.
+⭐ **smolBSD integrates it**: `mkimg.sh` checks `service/${svc}/sailor.conf` and
+sets `use_sailor=1`, and `mkimg.sh:210` carries a comment saying sailor's shrink
+is too aggressive and loses the journal.
+
+⚠ **Its own tracker is thin and old**: the newest substantive thread, `#15`, is
+from 2017 and asks how to use pkgsrc with it; the answer is from another user
+saying they ran out of motivation. ⛔ **Read it only as the thing smolBSD calls,
+not as a tool to adopt.**
+
+### `R33`, cross-toolchains: ⛔ **refused, and recorded so nobody mines it again**
+
+⭐ **It contains no BSD target of any kind.** Its Dockerfiles are Darwin, iOS,
+Windows MSVC, and Linux GNU and musl variants. ⚠ The BSD images belong to `R32`,
+not here. ⛔ **One pass, and there was no second question to ask.**

@@ -43,7 +43,7 @@ Copied on **2026-08-27** from `Azathothas/ToolKit` at commit `260f307`.
 | the host probe | `scripts/doctor/` | nothing |
 | conventions, methodology, security | `docs/conventions/`, `docs/methodology/`, `docs/security/` | nothing yet. ⚠ They still describe some things in ToolKit's terms and that is a debt, not a decision |
 | the BSD work record | `TODO/bsd.md` | nothing. It moved whole, corrections and all |
-| the 28-reference sweep | `HISTORY/references/` | nothing |
+| the 28-reference sweep | `HISTORY/references/` | nothing. ⚠ Three more sweeps have been added here since, taking it to 37 |
 
 ---
 

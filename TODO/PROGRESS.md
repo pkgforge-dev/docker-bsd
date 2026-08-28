@@ -16,7 +16,7 @@ entries themselves. Do not add a "previous sessions" section.
 ## State
 
 ```text
-session started 2026-08-28T03:40:00Z
+session started 2026-08-28T03:40:00Z, continued after an operator redirect
 baseline        an image that boots, and a provisioning step nobody could explain
 entries         total 22  open 20  blocked 0  done 2
 ```
@@ -30,7 +30,7 @@ hand to make a check pass; fix whichever file is wrong. ⭐
 | --- | --- |
 | repository | `pkgforge-dev/docker-bsd`, public, 0BSD |
 | work model | todo. [`../docs/methodology/work-todo.md`](../docs/methodology/work-todo.md) |
-| publishes | ⭐ **`ghcr.io/pkgforge-dev/netbsd`, which boots**, plus OCI images for four userlands |
+| publishes | ⭐ **`ghcr.io/pkgforge-dev/netbsd`, which boots**, plus OCI images for three userlands. ⛔ DragonFly dropped 2026-08-28, [`RULES.md`](RULES.md) decision 7 |
 | the local gate | ⭐ `sh scripts/common/check-gate.sh --fast`, then `sh tests/run.sh` |
 | CI | `ci.yml` static, and ⭐ **`image-netbsd.yml`, which builds a BSD, runs it and asserts on it** |
 
@@ -46,11 +46,12 @@ Two controls settle it, same bytes, same guest, minutes apart:
 | `tar` onto the guest's **ext2 root** | ⛔ still running at 900 s |
 | `tar` into a **tmpfs** in that guest | ⭐ finished |
 
-⭐ **It is the filesystem.** 1 KB blocks over 2 GB with no features, because
-this repository grows a small image with `resize2fs`, which cannot change a
-block size. The seconds and the geometry are in
-[`../docs/LIMITS.md`](../docs/LIMITS.md) and the readings are in `INF-09`.
-⛔ **They are not repeated here**: one fact, one home.
+⭐ **It is the filesystem.** 1 KB blocks over 2 GB with no features. ⛔ **And the
+fourth reference sweep found why, in upstream's own source**: smolBSD writes
+ext2 only when the BUILD HOST is Linux, and only for the BUILDER image, which is
+the image this repository ships as its runtime root. The seconds and the
+geometry are in [`../docs/LIMITS.md`](../docs/LIMITS.md) and the readings are in
+`INF-09`. ⛔ **They are not repeated here**: one fact, one home.
 
 ---
 
@@ -58,29 +59,27 @@ block size. The seconds and the geometry are in
 
 **2026-08-28.**
 
-1. ⭐ **`INF-09` narrowed from eight dead explanations to one measured cause**,
-   with two controls and a reading taken from inside the guest by the kernel
-   itself. ⛔ **`ktrace` is not available on this guest at all**: the binary is
-   in the userland and the syscall is not in the kernel.
-2. ⭐ **A second instrument, because the first one could not survive the
-   fault.** [`../experiments/43-siginfo-the-stuck-guest.sh`](../experiments/43-siginfo-the-stuck-guest.sh)
-   presses Ctrl-T and reads what the **kernel** prints, which needs no userland
-   to be scheduled. ⚠ [`../experiments/42-probe-pkg-add-inside-guest.sh`](../experiments/42-probe-pkg-add-inside-guest.sh)
-   is committed as the negative result: every program-shaped instrument in it
-   was starved out twice.
-3. ⛔ **`TODO/bsd.md` was 893 lines of corrections to corrections.** The
-   reasoning moved verbatim to
-   [`../HISTORY/bsd-entries.md`](../HISTORY/bsd-entries.md) and the entry file
-   is 155 lines of current facts.
-4. ⛔ **The 28-reference sweep was never reachable from the work.** Every
-   `TODO/` file now names the sections that bear on its entries, and
-   [`../docs/AGENTS.md`](../docs/AGENTS.md) routes to it before designing
-   anything rather than only under "studying another project".
-5. ⭐ **Two guards tightened and both seen to fail.** `tests/run.sh` lost its
-   `TODO/bsd.md` exemption, and its experiment-count check no longer fails a
-   correct document over a spelling it cannot read.
-6. ⭐ **Where the 155 MB goes is measured**, which `OPT-02` needed and did not
-   have.
+1. ⭐ **`INF-09` found, then CORRECTED by reading upstream.** Two controls said
+   the destination filesystem decides whether a 490 MB write finishes; the
+   fourth reference sweep then found the reason in smolBSD's own `mkimg.sh`:
+   ⛔ **ext2 is what it falls back to when the BUILD HOST is Linux, and only for
+   the BUILDER image**, which is the image this repository ships as its runtime
+   root.
+2. ⭐ **A fourth reference sweep, nine projects**, taking the total to 37. ⛔ **It
+   was run because the first three were never being read**: every citation to
+   them outside `HISTORY/` had arrived in the first commit.
+3. ⛔ **DragonFly dropped**, `RULES.md` decision 7. The working route and its
+   three traps are kept verbatim in
+   [`../HISTORY/dragonfly.md`](../HISTORY/dragonfly.md).
+4. ⛔ **`TODO/bsd.md` was 893 lines of corrections to corrections**, now 155
+   lines of current facts, with the reasoning moved verbatim to
+   [`../HISTORY/bsd-entries.md`](../HISTORY/bsd-entries.md).
+5. ⛔ **A claim in `docs/LIMITS.md` narrowed for the third time.** "A free
+   runner cannot use `/dev/kvm`" is wrong; **a rootless container on one cannot
+   open it** is what was measured. Somebody else runs BSD guests on free runners
+   with KVM in production.
+6. ⭐ **Two guards tightened and both seen to fail**, and one new defect filed
+   as `INF-10`.
 
 ---
 
@@ -88,20 +87,24 @@ block size. The seconds and the geometry are in
 
 ### 1. ⛔ `INF-09`, which is answered and not closed
 
-⭐ **The fix follows from the control.** The guest root is ext2 and Linux owns
-it completely: `debugfs -R rdump` the tree out, `mke2fs -b 4096 -d` a new one at
-the size wanted, write the package in from Linux. ⛔ **No guest, no emulator and
-no provisioning step**, which is what this file already said the entry should
-reach.
+⛔ **Start with the question the sweep raised, not with the filesystem.**
+Upstream treats `build-amd64.img` as a **build environment** and this repository
+ships it as a product. ⭐ **The cheapest fix may be to stop doing that**, and it
+costs no filesystem work.
+
+⭐ **Then, if the image is still the right one:** the guest root is ext2 and
+Linux owns it completely. `debugfs -R rdump` the tree out, `mke2fs -b 4096 -d` a
+new one at the size wanted, write the package in from Linux. ⛔ **No guest, no
+emulator and no provisioning step.**
 
 ⛔ **Prove the block size is the lever before rebuilding anything.** Repeat the
 two controls against a 4 KB filesystem. A fix that works and is not understood
 is the ninth guess, and eight are already dead.
 
-⚠ **Read `usable.md`'s `R7` section first.** smolBSD ships `smoler.sh`, a
-Dockerfile-shaped builder in which `RUN` works inside the guest, and this
-repository hand-wrote a serial-console provisioner without looking at it. That
-tracker holds 83 items and 51 threads and two have been read.
+⚠ **Read `usable.md`'s `R34` section first.** It carries `mkimg.sh:155`, which
+is where the filesystem is chosen, and `smoler/build.sh:245`, which is upstream
+provisioning with a **chroot** rather than a booted guest. ⛔ That tracker holds
+83 items and 51 threads and two have been read.
 
 ### 2. ⭐ `PERF-01`, which unblocks the moment 1 lands
 
@@ -110,6 +113,12 @@ tracker holds 83 items and 51 threads and two have been read.
 [`../scripts/bench-compile`](../scripts/bench-compile) runs both sides against
 the same bytes and both time themselves from the inside. ⚠ **The guest side
 needs a compiler in the image**, which is 1.
+
+⭐ **And user A is now a named command rather than an idea.** `apt install clang
+lld`, plus the BSD's own `base` and `comp` sets as a sysroot, plus about seventy
+lines of glue. ⛔ **No BSD host, no VM.** `usable.md`, the `R29` and `R30`
+sections. ⚠ **`scripts/sources` fetches `base` and `etc` and not `comp`**, and
+`comp` is where the headers and static libraries are.
 
 ### 3. `IMG-02` closes on 2
 
@@ -123,10 +132,19 @@ either.** A free runner moves by 42 percent between jobs and under 1 percent
 within one, which is eight times the gate `PERF-03` has to measure. ⛔ **Both
 sides in the same job, repeated, or the number means nothing.**
 
-⛔ **And every runner number is an emulated number.** A free runner cannot open
-`/dev/kvm`; the node arrives owned by `nobody`, `test -r` and `test -w` both
-answer yes anyway, and the emulator's `open` fails. What would make it work
-there is not known.
+⛔ **And every runner number this repository has taken is an emulated number**,
+because a **rootless container** on a runner cannot open `/dev/kvm`: the node
+arrives owned by `nobody`, `test -r` and `test -w` answer yes anyway, and the
+emulator's `open` fails. ⚠ **That is narrower than what was published before.**
+⭐ **A QEMU process on the runner itself DOES get KVM**, and somebody runs BSD
+guests that way in production. ⛔ **So the highest-value unknown is now
+specific**: can a container on a free runner be given a usable `/dev/kvm`?
+`usable.md`'s `R17` and `R31` sections.
+
+⛔ **And there is a trap waiting on the day it works.** With KVM the guest sees
+the host CPU, `guest.py` asks for `-cpu host,+invtsc`, and **a NetBSD guest on
+a host CPU with AMX jumps to address 0 while starting init**. The mask that
+fixes it is in the `R31` section.
 
 ### 5. ⚠ `INF-08` and `INF-10`, which are one file and should move together
 

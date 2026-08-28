@@ -11,8 +11,8 @@ unedited. ⚠ **Read that before overturning anything here**: several conclusion
 below are the second or third answer to their question, and the discarded ones
 are why.
 
-⭐ **The prior art is read, and it is in this repository.** 28 references were
-swept on 2026-08-27 and written up in two files:
+⭐ **The prior art is read, and it is in this repository.** 37 references have been
+swept, in four sweeps, and written up in two files:
 [`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
 verdicts and the ranking,
 [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the

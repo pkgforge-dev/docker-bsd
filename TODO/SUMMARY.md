@@ -10,7 +10,7 @@ what to do.
 
 ---
 
-## 2026-08-28, the session that stopped guessing at `INF-09` and measured it
+## 2026-08-28: measured `INF-09`, then read the source that explained it
 
 | row | before | after |
 | --- | --- | --- |
@@ -21,6 +21,8 @@ what to do.
 | **The 28-reference sweep** | ⛔ reachable only from a routing row nobody had reason to take | ⭐ **named, by section, from every `TODO/` file** |
 | **Checks** | 12-check gate, 50 tests | same, and ⭐ **two guards tightened, both seen to fail** |
 | **Experiments** | 9 | 11, one of them a committed negative result |
+| **References mined** | 28, in three sweeps | ⭐ **37, in four.** The fourth was run because the first three were never being read |
+| **BSDs targeted** | four | ⛔ **three.** DragonFly dropped, with its working route kept |
 
 ---
 
@@ -41,6 +43,14 @@ image with `resize2fs`, and `resize2fs` cannot change a block size.
 ⭐ **The sizes, the seconds and the geometry are in
 [`../docs/LIMITS.md`](../docs/LIMITS.md)** and the readings are in `INF-09`.
 They are not repeated here: one fact, one home.
+
+### ⛔ And then the source said why, which no measurement here could
+
+⭐ **smolBSD's `mkimg.sh` chooses the filesystem by the BUILD HOST**: `mke2fs -O
+none` when it is Linux, `newfs` when it is a BSD. ⛔ **And its comment says only
+the BUILDER image is ext2.** This repository ships that builder image as its
+runtime root. ⚠ **Found by re-mining a reference already on disk**, at the same
+commit as before.
 
 ---
 

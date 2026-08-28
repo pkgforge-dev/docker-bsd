@@ -1,8 +1,8 @@
 - #### [OCI images of the BSDs](https://github.com/orgs/pkgforge-dev/packages?repo_name=docker-bsd) [![ci](https://github.com/pkgforge-dev/docker-bsd/actions/workflows/ci.yml/badge.svg)](https://github.com/pkgforge-dev/docker-bsd/actions/workflows/ci.yml)
 
-Unofficial, automated OCI images of **FreeBSD, NetBSD, OpenBSD and DragonFly
-BSD**, built from each project's own published userland, plus the measured
-routes from an ordinary host to a **running** one.
+Unofficial, automated OCI images of **FreeBSD, NetBSD and OpenBSD**, built
+from each project's own published userland, plus the measured routes from an
+ordinary host to a **running** one.
 
 ⚠ **Proof of concept.** One architecture, `amd64`. The shape is settled and the
 coverage is not. [`docs/LIMITS.md`](docs/LIMITS.md) is the honest account of
@@ -88,9 +88,8 @@ is the single place that records which and why; everything else reads it.
 | FreeBSD | `oci` | ⭐ Upstream publishes real OCI layout archives with a `CHECKSUM.SHA256`. They are **verified and loaded, never rebuilt.** Rebuilding an image somebody already publishes correctly is the most expensive mistake available. |
 | NetBSD | `sets` | `base.tar.xz` is already a root filesystem tar owned `root/wheel`, so it imports directly. |
 | OpenBSD | `sets` | `base79.tgz` is the same shape, owned `root/bin`. 535 MB. |
-| DragonFly | `iso` | ⛔ Upstream publishes **no set tarballs at all**, only `.img` and `.iso`. The `.img` root filesystem is HAMMER2, which Linux cannot mount, so the disk image is a dead end on any CI runner. The ISO is ISO9660, confirmed by reading the `CD001` signature at offset 32769, so `bsdtar` or `7z` reads it anywhere. |
 
-⚠ **Only FreeBSD publishes OCI images upstream.** For the other three these
+⚠ **Only FreeBSD publishes OCI images upstream.** For the other two these
 are, as far as this repository's authors could determine on 2026-08-27, the
 only published OCI images that exist.
 
@@ -140,7 +139,6 @@ step up and is **not** implemented.
 | `podman` or `docker` | everything |
 | `curl` | everything |
 | `sha256sum` or `shasum` | FreeBSD's digest check. ⛔ Absence is an error, not a skip. |
-| `bsdtar` or `7z` | DragonFly only, to read ISO9660 |
 
 ⚠ **On Windows, set `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'`** before
 driving podman from Git Bash. The scripts are written to survive it: every
@@ -162,7 +160,7 @@ full account, with numbers, is [`docs/LIMITS.md`](docs/LIMITS.md).
 | ⛔ nothing you build inside the guest comes out | `-v` reaches the container and stops there. `IMG-03` |
 | ⚠ three of four BSDs have no runtime | `ocijail` exists for FreeBSD. Nothing equivalent exists for the others |
 | ⚠ NetBSD and OpenBSD import **one set** | `podman import` takes a single tar. `base` is a complete userland; `etc` and the rest are not merged in |
-| ⚠ DragonFly is **method-verified, not yet built** | the ISO9660 route was confirmed by reading the `CD001` signature; the 748 MB extraction has not been run end to end |
+| ⚠ DragonFly was **dropped on 2026-08-28** | it needed a third acquisition method of its own. The route worked and is kept, with its three traps, in [`HISTORY/dragonfly.md`](HISTORY/dragonfly.md) |
 | ⚠ no signature verification | integrity only, per above |
 | ⚠ `amd64` only | one architecture is enough to prove the shape |
 | ⚠ one release per BSD | pinned in `scripts/sources`. Publishing every release is a different decision with a retention policy attached |

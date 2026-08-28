@@ -248,6 +248,32 @@ asking for a device and having the attempt fail.
 evidence that it is usable. ⚠ **What would make it work on a runner is not
 measured here.** `--group-add keep-groups` was tried and changed nothing.
 
+### ⛔ NARROWED 2026-08-28: this is about the CONTAINER, not about the runner
+
+⚠ **The heading above says "on a free runner" and that is too broad.** Everything
+measured here was measured **inside a rootless container**. ⛔ **A QEMU process
+running on the runner itself does get working KVM**, and somebody else has been
+relying on it in production for years: `cross-platform-actions/action` boots
+FreeBSD, OpenBSD and NetBSD guests on `ubuntu-latest` with
+`-machine accel=hvf:kvm:tcg` and hardware acceleration enabled.
+[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md), the `R31`
+section.
+
+⛔ **So the honest statement narrows again**, and this is the third time this
+claim has been rewritten:
+
+| the claim | state |
+| --- | --- |
+| "a free runner cannot use `/dev/kvm`" | ⛔ **wrong.** Withdrawn |
+| "a rootless container on a free runner cannot open `/dev/kvm` when the device is handed in" | ⭐ **measured here**, and still stands |
+| what would make the container able to open it | ⚠ **still not measured.** `R17`'s `udev` rule is the nearest published answer and was not tried |
+
+⛔ **And there is a trap waiting on the day it does work.** With KVM the guest
+sees the host CPU, and `images/netbsd/guest.py` asks for `-cpu host,+invtsc`.
+⛔ **A NetBSD guest given a host CPU with AMX jumps to address 0 while starting
+init**, measured by somebody else across 16 restarts of the same job. The
+feature mask that fixes it is in the `R31` section.
+
 ⭐ **Note what none of this touches.** Boot time is not throughput. A guest that
 executes very few instructions before reaching a prompt is the case where an
 accelerator has least to win, and a compile is the opposite case.
@@ -491,5 +517,6 @@ withdrawn.
 - ⛔ **macOS.** Not attempted.
 - ⚠ **Whether the 2.6 s route survives being packaged as an image.** It was
   measured with the artefacts on a bind mount, not baked into a layer.
-- ⚠ **Anything about the other two BSDs.** OpenBSD and DragonFly have images
-  here and no measured way to run them.
+- ⚠ **Anything about OpenBSD.** It has an image here and no measured way to
+  run it. ⛔ DragonFly was dropped on 2026-08-28:
+  [`../HISTORY/dragonfly.md`](../HISTORY/dragonfly.md).

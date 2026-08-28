@@ -19,9 +19,10 @@ and it is the only file that carries one.
 | path | what it is |
 | --- | --- |
 | [`poc.md`](poc.md) | ⭐ the proof of concept. Every measurement behind the image-building half, with the commands that produced it |
+| [`dragonfly.md`](dragonfly.md) | ⛔ **why DragonFly was dropped on 2026-08-28, and the working route that went with it**, kept verbatim so reversing the decision is a restore rather than a rewrite |
 | [`bsd-entries.md`](bsd-entries.md) | ⛔ **how `BSD-01` and `BSD-02` reached their current answers**, in the original wording: the ranking table, the ruling that reopened it, the contradiction, and six sections headed `Correction:`. Moved out of `../TODO/bsd.md` on 2026-08-28 so that file could carry current facts |
 | [`misc/`](misc/) | session records and the orientation prompt |
-| [`references/`](references/) | ⭐ 28 external projects mined, with verdicts, a ranking, and the commands worth stealing |
+| [`references/`](references/) | ⭐ 37 external projects mined across four sweeps, with verdicts, a ranking, and the commands worth stealing |
 | [`reviews/`](reviews/) | ⭐ deep reviews, **numbered by the reader each one imagines**. Each says what it swept, what it found, and ⛔ what it did NOT look at |
 
 ---
@@ -45,6 +46,9 @@ about; a review named after a person finds what that person would trip over.
 | [`reviews/9-somebody-auditing-what-this-image-pulls-in.md`](reviews/9-somebody-auditing-what-this-image-pulls-in.md) | ⛔ a person approving this for a team, asking what it downloads and whom it trusts |
 | [`reviews/10-somebody-who-has-to-trust-this-sessions-instruments.md`](reviews/10-somebody-who-has-to-trust-this-sessions-instruments.md) | ⛔ a reader who notices that every conclusion came out of a tool written the same day, against a fault nobody understood |
 | [`reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md`](reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md) | ⛔ the person who spent a day reading other people's trackers, asking whether that day bought anything |
+| [`reviews/12-somebody-who-has-to-build-the-cross-toolchain-on-monday.md`](reviews/12-somebody-who-has-to-build-the-cross-toolchain-on-monday.md) | ⭐ a reader acting on the fourth sweep, asking whether they can start without re-cloning anything |
+| [`reviews/13-somebody-checking-that-dropping-a-bsd-broke-nothing.md`](reviews/13-somebody-checking-that-dropping-a-bsd-broke-nothing.md) | ⛔ the door sweep applied to a REMOVAL, where nothing fails loudly |
+| [`reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md`](reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md) | ⛔ review 7 re-run against evidence it did not have. The alternative got cheaper |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a

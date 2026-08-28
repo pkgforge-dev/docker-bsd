@@ -12,7 +12,7 @@ what this file exists to prevent.
 
 ### ⭐ Prior art already read, and it is in this repository
 
-⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+⛔ **37 projects have been mined, in four sweeps, with their trackers.**
 [`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
 verdicts and the ranking;
 [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
@@ -22,8 +22,9 @@ once and is recorded under `INF-09`.
 
 | the entry | read, by section |
 | --- | --- |
+| ⛔ **`PERF-01`, the OTHER side of the ratio** | ⭐ `usable.md`, the `R29` `ppkg` section. It **cross-compiles for all three BSDs from Linux with stock clang and the BSD's own published sets**, and `R30` runs it on a free runner with `apt install clang lld`. That is user A, built and working, and this repository does not have it |
 | `PERF-01`, anything timing a guest | ⭐ `findings.md`, the `R18` `anyvm` verdict. It is the only reference here that has **measured** the Windows hypervisor, and it is the engine under `vmactions` |
-| `PERF-01`, acceleration | ⛔ `usable.md`, the `R17` section: the `udev` rule that makes a **CI runner's `/dev/kvm` writable**. `docs/LIMITS.md` section 1b records that handing the device in is not enough on a rootless engine, and this is the nearest published answer |
+| `PERF-01`, acceleration | ⛔ `usable.md`, the `R17` section: the `udev` rule that makes a **CI runner's `/dev/kvm` writable**, and the `R31` section, which shows a QEMU process on a free runner **using KVM in production**. ⛔ `R31` also carries the CPU feature mask without which **a NetBSD guest on a host CPU with AMX jumps to address 0** |
 | `PORT-01`, other hosts | `usable.md`, the `R8` `vmactions` section: a library of `qcow2` guests for four BSDs across four architectures, and the most used BSD CI action there is |
 | `PORT-01`, arm64 | ⚠ `usable.md`'s `R7` line records `evbarm-aarch64` images exist upstream. ⛔ Nothing here has run one |
 

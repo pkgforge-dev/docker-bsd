@@ -6,7 +6,7 @@
 # Everything reads this file, so bumping a release is one edit.
 #
 # ⛔ EVERY FACT BELOW WAS MEASURED ON 2026-08-27, NOT READ FROM DOCUMENTATION.
-# The four BSDs need three different acquisition methods and that is the whole
+# The three BSDs need two different acquisition methods and that is the whole
 # reason this file is not a flat list:
 #
 #   freebsd    OCI       upstream publishes real OCI layout archives. Verified
@@ -18,25 +18,25 @@
 #                        so it imports directly. Confirmed: the resulting image
 #                        reports os=netbsd arch=amd64, 269 MB.
 #   openbsd    SETS      base79.tgz is the same shape, owned root/bin. 535 MB.
-#   dragonfly  ISO       ⛔ THE ODD ONE. Upstream publishes no set tarballs at
-#                        all, only .img and .iso. The .img root filesystem is
-#                        HAMMER2 and Linux cannot mount it, so the disk image is
-#                        a dead end on any CI runner. The ISO is ISO9660,
-#                        confirmed by reading the CD001 signature at offset
-#                        32769, so it is readable by bsdtar or 7z anywhere and
-#                        that is the route.
+#
+# ⛔ DRAGONFLY WAS HERE AND IS NOT ANY MORE. Ruled out by the operator on
+# 2026-08-28: it is the least maintained of the four and the other three are
+# what anybody actually targets. TODO/RULES.md decision 7. ⚠ What was learnt
+# about reading its ISO is kept in HISTORY/dragonfly.md, not deleted, because
+# the next person to ask "why not DragonFly" deserves the measurement rather
+# than a shrug.
 #
 # ⚠ x86_64 ONLY, on purpose. This is a proof of concept and one architecture is
 # enough to prove it. FreeBSD publishes aarch64 and riscv64 as well; the others
 # vary. Adding an architecture means checking it exists first, per BSD.
 #
 # ⭐ IT ALSO PINS THE RUNNABLE IMAGE'S ARTEFACTS, and that is a second kind of
-# fact rather than a fifth BSD. The four ids above are USERLANDS: a tar that
+# fact rather than a fourth BSD. The three ids above are USERLANDS: a tar that
 # becomes an image nobody can run without a BSD kernel. The runtime ids below
 # are what makes one image BOOT: a guest kernel and a guest root filesystem
 # that an emulator inside the image starts.
 #
-# ⛔ THEY ARE PINNED BY SHA-256 AND THE FOUR ABOVE ARE NOT. That asymmetry is
+# ⛔ THEY ARE PINNED BY SHA-256 AND THE THREE ABOVE ARE NOT. That asymmetry is
 # deliberate and it is about what the URL points at. An upstream release
 # directory names its version, so the URL is the pin. Both runtime artefacts
 # live behind a MOVING pointer: one is an unversioned asset path and the other
@@ -49,7 +49,7 @@
 #
 # Usage:
 #   sh scripts/sources --list                every id
-#   sh scripts/sources --method ID           oci | sets | iso
+#   sh scripts/sources --method ID           oci | sets
 #   sh scripts/sources --version ID
 #   sh scripts/sources --urls ID             one URL per line
 #   sh scripts/sources --json                a GitHub Actions matrix
@@ -78,7 +78,6 @@ ARCH_OCI="amd64"
 FREEBSD_VERSION="15.1-RELEASE"
 NETBSD_VERSION="10.1"
 OPENBSD_VERSION="7.9"
-DRAGONFLY_VERSION="6.4.2"
 
 # ⚠ OpenBSD names its set after the version with the dot removed: 7.9 is
 # base79.tgz. Derived rather than hardcoded so a bump does not need two edits.
@@ -87,7 +86,6 @@ OPENBSD_SETVER=$(printf '%s' "$OPENBSD_VERSION" | tr -d '.')
 FREEBSD_BASE="https://download.freebsd.org/releases/OCI-IMAGES/${FREEBSD_VERSION}/${ARCH_OCI}/Latest"
 NETBSD_BASE="https://cdn.netbsd.org/pub/NetBSD/NetBSD-${NETBSD_VERSION}/${ARCH_OCI}/binary/sets"
 OPENBSD_BASE="https://cdn.openbsd.org/pub/OpenBSD/${OPENBSD_VERSION}/${ARCH_OCI}"
-DRAGONFLY_BASE="https://mirror-master.dragonflybsd.org/iso-images"
 
 # ⚠ FreeBSD ships five variants. Ordered smallest first, so a matrix that is
 # going to fail fails on the 559 KB one rather than the 215 MB one.
@@ -213,7 +211,7 @@ SMOL_BUILD_PKG_PINNED_SHA256="93c5e1aeda6227915c6a4d70af5b55888760f5015608085617
 SMOL_BENCH_URL="https://sqlite.org/2025/sqlite-autoconf-3500400.tar.gz"
 SMOL_BENCH_PINNED_SHA256="a3db587a1b92ee5ddac2f66b3edb41b26f9c867275782d46c3a088977d6a5b18"
 
-ids() { printf 'freebsd\nnetbsd\nopenbsd\ndragonfly\n'; }
+ids() { printf 'freebsd\nnetbsd\nopenbsd\n'; }
 
 runtime_variants() { printf 'rescue\nbuild\n'; }
 
@@ -317,7 +315,6 @@ method() {
     freebsd)   printf 'oci\n' ;;
     netbsd)    printf 'sets\n' ;;
     openbsd)   printf 'sets\n' ;;
-    dragonfly) printf 'iso\n' ;;
     *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
   esac
 }
@@ -327,7 +324,6 @@ version() {
     freebsd)   printf '%s\n' "$FREEBSD_VERSION" ;;
     netbsd)    printf '%s\n' "$NETBSD_VERSION" ;;
     openbsd)   printf '%s\n' "$OPENBSD_VERSION" ;;
-    dragonfly) printf '%s\n' "$DRAGONFLY_VERSION" ;;
     *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
   esac
 }
@@ -344,8 +340,6 @@ urls() {
       printf '%s/etc.tar.xz\n' "$NETBSD_BASE" ;;
     openbsd)
       printf '%s/base%s.tgz\n' "$OPENBSD_BASE" "$OPENBSD_SETVER" ;;
-    dragonfly)
-      printf '%s/dfly-x86_64-%s_REL.iso\n' "$DRAGONFLY_BASE" "$DRAGONFLY_VERSION" ;;
     *) printf 'sources: unknown id: %s\n' "$1" >&2; exit 2 ;;
   esac
 }

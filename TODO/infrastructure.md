@@ -434,6 +434,53 @@ inside NetBSD's `ext2fs` is spinning has NOT been read**, and this repository
 has twice published a tidy mechanism invented to fit a number. The next step is
 the control in the approach, not a theory.
 
+### ⭐ CORRECTED 2026-08-28 BY READING UPSTREAM. The ext2 is a build-host fallback
+
+⛔ **The section above says "this repository made that filesystem" and that is
+only half true.** The fourth reference sweep re-mined smolBSD at `0824f4ee04fc`
+and found the choice made in upstream's own `mkimg.sh`, lines 155 to 167:
+
+```text
+if [ -n "$is_linux" ]; then
+	# no other image than builder image are ext2, don't check for FROMIMG
+	mke2fs -O none ${vnd}
+	mountfs="ext2fs"
+elif [ -n "$is_freebsd" ]; then
+	newfs -o time -O1 -m0 /dev/${mountdev}
+	mountfs="ffs"
+else # NetBSD
+	newfs -O1 -m0 /dev/${mountdev}
+	mountfs="ffs"
+```
+
+⭐ **Three facts, and they change the fix:**
+
+1. ⛔ **ext2 is what smolBSD falls back to when the BUILD HOST is Linux**,
+   because a Linux host cannot `newfs` an FFS. It is not a decision about the
+   guest. On a NetBSD or FreeBSD build host the same script produces **FFS**.
+2. ⛔ **The comment says only the BUILDER image is ext2.** This repository
+   ships `build-amd64.img`, which is that builder image, as its runtime root.
+3. ⛔ **`mke2fs -O none` is literally "no features"**, which is exactly what
+   `dumpe2fs` reported here. ⭐ **The filesystem this entry is stuck on is
+   generated at that line**, and the 1 KB block size follows from `mke2fs`
+   defaults on a small image.
+
+⚠ **Upstream has met ext2 trouble of its own**: `mkimg.sh:319` carries the
+comment `unionfs with ext2 leads to i/o error`.
+
+⭐ **And upstream provisions with a chroot, not a booted guest.**
+`smoler/build.sh:245` turns a `RUN` line into
+`chroot . su ${USER} -c "cd ${WORKDIR} && ..."`, inside a script that refuses to
+run outside the builder image. ⛔ **This repository types at a serial console
+instead**, which is the mechanism this entry is about.
+
+⛔ **So the question is no longer "what block size".** It is "why is the builder
+image the runtime root at all".
+[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md), the `R34`
+section, has the lines.
+
+---
+
 ### ⛔ EIGHT EXPLANATIONS, ALL DEAD, KEPT BECAUSE EACH COST A DIFFERENT FIX
 
 ⚠ **This entry was first written with a confident explanation and it was
@@ -472,6 +519,10 @@ different filesystem in the same guest, and see which one finishes.
 ⭐ **The fix follows from the control rather than from a theory.** In order of
 what is cheapest to prove:
 
+0. ⛔ **Ask first whether the builder image should be the runtime root at all.**
+   Upstream ships `rescue-amd64.img` and `build-amd64.img` and treats the second
+   as a **build environment**, not a product. ⭐ **The cheapest possible fix is
+   to stop shipping it as one**, and it costs no filesystem work.
 1. ⭐ **Make the filesystem instead of growing it.** The guest root is ext2 and
    Linux owns it completely: `debugfs -R rdump` the published tree out,
    `mke2fs -b 4096 -d` a new one at the size wanted, and write the package in
@@ -481,12 +532,15 @@ what is cheapest to prove:
 2. ⚠ **Prove the block size is the lever before rebuilding anything**, by
    repeating the two controls against a 4 KB filesystem. ⛔ A fix that works and
    is not understood is the ninth guess.
-3. ⚠ **Read what upstream already provides before writing either.**
+3. ⭐ **Or produce FFS rather than ext2**, which is what upstream does on a BSD
+   build host. ⚠ **That needs a BSD to run `newfs`**, and [`RULES.md`](RULES.md)
+   says none exists here, so it would have to happen inside this project's own
+   guest. ⛔ Recorded as the option it is, not recommended.
+4. ⚠ **Read what upstream already provides before writing any of them.**
    [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md), the
-   `R7` section, records that smolBSD ships `smoler.sh` with a
-   Dockerfile-shaped build in which `RUN` works inside the guest. ⛔ **This
-   repository hand-rolled a serial-console provisioner without looking at it**,
-   and `R7`'s tracker holds 83 items and 51 threads of which two were read.
+   `R34` section. ⛔ **This repository hand-rolled a serial-console provisioner
+   without looking at `smoler/build.sh`**, whose tracker holds 83 items and 51
+   threads of which two have been read.
 
 ⛔ **And do not leave the trap in place for a consumer.** Somebody who boots the
 build variant and unpacks anything large meets exactly this, with the same

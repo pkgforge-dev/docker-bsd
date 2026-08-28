@@ -167,63 +167,15 @@ build_sets() {
   TAG="${VERSION}-base"
 }
 
-# ── DragonFly: no sets exist, and the disk image is HAMMER2 ────────────────
-build_iso() {
-  # ⛔ THE .img IS NOT USABLE AND THAT IS NOT AN OVERSIGHT. DragonFly's root
-  # filesystem is HAMMER2 and Linux has no driver for it, so no CI runner can
-  # mount the disk image. The ISO is ISO9660, confirmed by reading the CD001
-  # signature at offset 32769, so bsdtar and 7z can read it on any host.
-  # ⭐ EITHER READER, because the two hosts this has to run on have different
-  # ones. CI runners get bsdtar from libarchive-tools; this developer's Windows
-  # machine has 7z and no bsdtar. Requiring one would make the script
-  # unrunnable on a machine that can perfectly well do the job.
-  _reader=""
-  if command -v bsdtar >/dev/null 2>&1; then _reader="bsdtar"
-  elif command -v 7z >/dev/null 2>&1; then _reader="7z"
-  elif command -v 7zz >/dev/null 2>&1; then _reader="7zz"
-  else
-    printf 'build-bsd: dragonfly needs bsdtar or 7z to read ISO9660\n' >&2
-    printf '  ubuntu:  apt-get install -y libarchive-tools\n' >&2
-    printf '  windows: scoop install 7zip\n' >&2
-    exit 2
-  fi
-  printf 'build-bsd: reading the ISO with %s\n' "$_reader" >&2
-
-  _u=$(sh "$SOURCES" --urls dragonfly)
-  _iso=$(fetch "$_u") || exit 1
-  _isoname=$(basename "$_iso")
-
-  _root="$WORK/root"
-  mkdir -p "$_root"
-  # ⛔ Bare filenames, run from WORK: the same native-binary path problem that
-  # bit curl and podman above applies to 7z, which is also a Windows binary.
-  if [ "$_reader" = "bsdtar" ]; then
-    ( cd "$WORK" && bsdtar -xf "$_isoname" -C root ) || {
-      printf 'build-bsd: could not extract the ISO with bsdtar\n' >&2; exit 1; }
-  else
-    ( cd "$WORK" && "$_reader" x -y -oroot "$_isoname" >/dev/null ) || {
-      printf 'build-bsd: could not extract the ISO with %s\n' "$_reader" >&2; exit 1; }
-  fi
-
-  # ⚠ Ownership is normalised to root. An ISO carries no useful uid, and a tar
-  # holding a build machine's uid is what rootless podman refuses with
-  # "potentially insufficient UIDs or GIDs available in user namespace".
-  # Measured here on the first attempt.
-  ( cd "$_root" && tar --owner=0 --group=0 --numeric-owner -cf "$WORK/rootfs.tar" . ) || {
-    printf 'build-bsd: could not repack the root filesystem\n' >&2; exit 1; }
-
-  LOADED="localhost/${BSD}-import:$$"
-  ( cd "$WORK" && "$ENGINE" import --os dragonfly --arch "$ARCH" \
-      --change 'CMD ["/bin/sh"]' \
-      "rootfs.tar" "$LOADED" ) >/dev/null 2>&1 || {
-      printf 'build-bsd: import failed\n' >&2; exit 1; }
-  TAG="${VERSION}-base"
-}
+# ⚠ DragonFly was here and was removed on 2026-08-28. It needed a third
+# acquisition method of its own, an ISO9660 reader, and a tool dependency
+# neither other BSD needs. ⛔ The route WORKED and the code is kept verbatim
+# in HISTORY/dragonfly.md rather than deleted, along with the three traps it
+# paid for. TODO/RULES.md decision 7.
 
 case "$METHOD" in
   oci)  build_oci ;;
   sets) build_sets ;;
-  iso)  build_iso ;;
   *) printf 'build-bsd: unknown method %s\n' "$METHOD" >&2; exit 2 ;;
 esac
 

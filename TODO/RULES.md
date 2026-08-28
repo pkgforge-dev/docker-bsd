@@ -100,6 +100,32 @@ measurement.
 FreeBSD publishes its own OCI images. They are verified and loaded here, never
 rebuilt.
 
+### 7. ⛔ Three BSDs, not four. DragonFly is dropped
+
+**Ruled** 2026-08-28 by the operator.
+
+⛔ **The targets are FreeBSD, OpenBSD and NetBSD.** Everything else is either a
+derivative of one of those or too niche to carry.
+
+⚠ **DragonFly was not dropped because the route failed.** It worked: the disk
+image is HAMMER2 and unreadable on Linux, and the ISO is ISO9660 and readable
+anywhere. ⛔ It was dropped because it was the only target needing a **third
+acquisition method**, an ISO9660 reader, and a tool dependency neither other BSD
+needs, for the least maintained of the four.
+
+⭐ **The code and the three traps it paid for are kept**, verbatim, in
+[`../HISTORY/dragonfly.md`](../HISTORY/dragonfly.md), so reversing this is a
+restore rather than a rewrite.
+
+### 8. ⛔ The cross toolchain, when one is needed, is `mussel`
+
+**Ruled** 2026-08-28 by the operator.
+
+⚠ **For Linux targets only**, which is what it does: it builds a cross compiler
+targeting `musl`. ⛔ **It has no BSD target and is not the answer to
+`PERF-02`'s user A.** [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md),
+the `R37` section, has the command and what it covers.
+
 ---
 
 ## ⛔ How work is done here

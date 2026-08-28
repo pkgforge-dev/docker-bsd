@@ -11,7 +11,7 @@ to exist.
 
 ### ⭐ Prior art already read, and it is in this repository
 
-⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+⛔ **37 projects have been mined, in four sweeps, with their trackers.**
 [`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
 verdicts and the ranking;
 [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
@@ -21,8 +21,10 @@ once and is recorded under `INF-09`.
 
 | the entry | read, by section |
 | --- | --- |
-| `IMG-01`, `IMG-02` | ⭐ `usable.md`, the `R7` `smolBSD` section. It is the upstream of the image this repository publishes, and it ships **`smoler.sh`, a Dockerfile-shaped builder in which `RUN` works inside the guest**. ⛔ `findings.md`'s `R7` verdict records 83 tracker items and 51 threads, of which **two** were read |
+| ⛔ **`IMG-02`, before anything else** | ⭐ `usable.md`, the `R34` section. Upstream's `mkimg.sh` chooses **ext2 only when the BUILD HOST is Linux**, and only for the **builder** image. ⛔ **This repository ships that builder as its runtime root**, which is what `INF-09` is. And its `RUN` is a **chroot**, not a booted guest |
+| `IMG-01`, `IMG-02` | ⭐ `usable.md`, the `R7` and `R34` `smolBSD` sections. It is the upstream of the image this repository publishes. ⛔ Its tracker holds 83 items and 51 threads, of which **two** have been read |
 | `IMG-01`, distribution | ⭐ `usable.md`, `R7`'s registry section: a raw bootable disk pushed through `oras`. ⚠ It carries the Windows trap too: `oras` writes a **zero-byte file** because a tag contains a colon, and neither errors nor sanitises |
+| ⭐ **`IMG-03`, and upstream has an answer** | `usable.md`, the `R34` section: a smolerfile carries `LABEL smolbsd.publish="8881:8880"`, because a Dockerfile has no port mapping. ⭐ And `LABEL smolbsd.minimize=y` shrinks an image to its content |
 | `IMG-03`, a shared filesystem | ⛔ `usable.md`'s `honest-limit` row on NetBSD's `mount_psshfs`: 30-second attribute caching over the page cache, and object files read back `file too short` under a parallel build. **NFS or a local disk with copy-back**, not psshfs |
 | `IMG-03`, and what an image ought to be | `findings.md`, the `R24` `oci-jails` row, whose `CATALOG.md` maps every FreeBSD OCI image source, and the `R4` `cbsd_oci.md` verdict: "OCI is an image standard, it does not regulate how exactly to work with the image" |
 
