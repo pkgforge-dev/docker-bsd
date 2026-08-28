@@ -48,6 +48,21 @@
 # ⚠ WHAT THIS STILL DOES NOT READ. Which loop inside NetBSD's `ext2fs` is
 # spinning. This is a control, not a mechanism, and `INF-09` says so.
 #
+# ── ⭐ WHAT IT FOUND, 2026-08-28. BOTH FINISHED ────────────────────────────
+#
+#   RESULT case=4k finished=yes      32 s
+#   RESULT case=1k finished=yes      35 s
+#
+# ⛔ SO THE BLOCK SIZE IS NOT THE LEVER, and the rebuild this file was
+# written to justify would have been a fix nobody understood.
+#
+# ⚠ AND THE PREMISE IN THE FIRST PARAGRAPH IS ITSELF WITHDRAWN. The `tar`
+# that was said not to finish in 900 s finishes in about half a minute when
+# it is run again, which [45-is-it-the-root.sh](45-is-it-the-root.sh) found
+# next. ⛔ The paragraph is kept because it is why this file exists; it is
+# not a current fact. ../TODO/infrastructure.md carries those and
+# ../HISTORY/inf-09.md carries the wording that was withdrawn.
+#
 # Usage:
 #   sh experiments/44-block-size-control.sh [IMAGE]
 #

@@ -56,6 +56,18 @@
 # ⚠ WHAT THIS DOES NOT READ. Which loop inside NetBSD's `ext2fs` is spinning.
 # `INF-09` has published an invented mechanism twice; this is a control.
 #
+# ── ⭐ WHAT IT FOUND, 2026-08-28. ALL THREE FINISHED ───────────────────────
+#
+#   RESULT case=raw  finished=yes    34 s
+#   RESULT case=self finished=yes    34 s
+#   RESULT case=root finished=yes    35 s
+#
+# ⛔ THE REFERENCE IS THE FINDING. `root` is the exact run `INF-09` recorded
+# as still going after 900 seconds, and it finished in 35. So the filesystem
+# is exonerated and so is the reading that convicted it.
+# ⭐ `pkg_add` on the same archive still does not finish, which is what is
+# left. ../HISTORY/inf-09.md carries the wording that was withdrawn.
+#
 # Usage:
 #   sh experiments/45-is-it-the-root.sh [IMAGE]
 #
