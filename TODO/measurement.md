@@ -9,6 +9,24 @@ says "not measured" into a number.
 ⛔ **An entry closes with a number, not with a conclusion.** "It seems fine" is
 what this file exists to prevent.
 
+
+### ⭐ Prior art already read, and it is in this repository
+
+⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+[`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
+verdicts and the ranking;
+[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
+commands. ⚠ **A session that designs before reading the sections named below is
+re-deriving work that is already on disk**, which has happened here at least
+once and is recorded under `INF-09`.
+
+| the entry | read, by section |
+| --- | --- |
+| `PERF-01`, anything timing a guest | ⭐ `findings.md`, the `R18` `anyvm` verdict. It is the only reference here that has **measured** the Windows hypervisor, and it is the engine under `vmactions` |
+| `PERF-01`, acceleration | ⛔ `usable.md`, the `R17` section: the `udev` rule that makes a **CI runner's `/dev/kvm` writable**. `docs/LIMITS.md` section 1b records that handing the device in is not enough on a rootless engine, and this is the nearest published answer |
+| `PORT-01`, other hosts | `usable.md`, the `R8` `vmactions` section: a library of `qcow2` guests for four BSDs across four architectures, and the most used BSD CI action there is |
+| `PORT-01`, arm64 | ⚠ `usable.md`'s `R7` line records `evbarm-aarch64` images exist upstream. ⛔ Nothing here has run one |
+
 ---
 
 ## PERF-01. What does real work cost inside the guest

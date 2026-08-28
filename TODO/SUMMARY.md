@@ -10,87 +10,64 @@ what to do.
 
 ---
 
-## 2026-08-27 into 2026-08-28, the session that published a BSD anybody can run
+## 2026-08-28, the session that stopped guessing at `INF-09` and measured it
 
 | row | before | after |
 | --- | --- | --- |
-| **Elapsed** | 2026-08-27T17:00:00Z | about 7 hours |
-| **Commits** | `e025538` | twelve on `main`, pushed with admin bypass over a protected branch |
-| **Work** | 19 open, 2 P0 | ⭐ **`IMG-01` closed**, `IMG-02` most of the way, two new entries filed from measurements |
-| **What it publishes** | four userlands nobody can run | ⭐ **an image that boots**, `ghcr.io/pkgforge-dev/netbsd:latest`, anonymously pullable |
-| **Checks** | 12-check gate, 48 tests | same gate, 50 tests, plus ⭐ **a CI workflow that runs a BSD and asserts on it** |
-| **Cost** | | no money. About 1.3 GB downloaded |
-| **Health** | 19 entries, 1 done | 21 entries, 2 done, two new deep reviews |
+| **Elapsed** | 2026-08-28T03:40:00Z | about 8 hours |
+| **`INF-09`** | ⛔ six dead explanations, all inferred from outside the guest | ⭐ **answered.** Two controls, and a reading taken by the kernel |
+| **Work** | 21 entries, 2 done | 22 entries, 2 done, one new defect filed |
+| **`TODO/bsd.md`** | ⛔ 893 lines of corrections to corrections | ⭐ **155 lines of current facts**, with the reasoning moved verbatim to `HISTORY/` |
+| **The 28-reference sweep** | ⛔ reachable only from a routing row nobody had reason to take | ⭐ **named, by section, from every `TODO/` file** |
+| **Checks** | 12-check gate, 50 tests | same, and ⭐ **two guards tightened, both seen to fail** |
+| **Experiments** | 9 | 11, one of them a committed negative result |
 
 ---
 
 ## ⭐ What was reached
 
-⛔ **The ask was an image a stranger can run, not a route somebody proved once.**
+⛔ **`pkg_add` was never the problem, and neither was the guest.** Two controls,
+the same 490 MB, the same 1,664 files, in the same image, minutes apart:
 
 ```text
-$ podman run --rm -i ghcr.io/pkgforge-dev/netbsd:latest sh -c 'sysctl -n kern.ostype'
-smolBSD
-exit 0
+tar xpf /guest-package.tgz -C /var/tmp     onto the ext2 root   still running at 900 s
+tar xpf /guest-package.tgz -C /mnt/t       into a tmpfs          TMPFS-EXTRACT-DONE
 ```
 
-Pulled from the registry, on a machine that had just deleted its local copy.
-Built and proved on a free `ubuntu-latest` runner, with no privilege, no device
-and no network at run time.
+⭐ **It is the filesystem.** The guest root is ext2 with **1 KB blocks over
+2 GB and no features at all**, because this repository grows a small published
+image with `resize2fs`, and `resize2fs` cannot change a block size.
 
-⭐ **The sizes, the seconds and the conditions are in
-[`../docs/LIMITS.md`](../docs/LIMITS.md).** They are not repeated here: one
-fact, one home.
-
----
-
-## ⛔ What is still not true
-
-⚠ **Read this before the findings.** The image existing is the attractive half.
-
-| the question | the answer today |
-| --- | --- |
-| can I run a BSD in one command | ⭐ **yes.** That is new |
-| is there a real userland in it | ⭐ **yes**, in `netbsd:build`: `uname`, `make`, `pkg_add`, `pkgin` and a network. ⛔ The compiler is staged inside it and not installed: installing it does not finish, which is `INF-09` |
-| can I get a source tree in and a binary out | ⛔ **no.** `-v`, `-p` and `-e` still stop at the container. `IMG-03` |
-| what does real work cost | ⛔ **still unknown.** Nothing here has compiled anything and timed it |
-| would I switch from a cross toolchain | ⛔ **no evidence either way.** `PERF-02`, `PERF-03`, and the bar is 5 percent |
-| does it work on hosts other than these two | ⚠ **unmeasured**, but the command to find out now exists: [`../scripts/time-image`](../scripts/time-image) |
+⭐ **The sizes, the seconds and the geometry are in
+[`../docs/LIMITS.md`](../docs/LIMITS.md)** and the readings are in `INF-09`.
+They are not repeated here: one fact, one home.
 
 ---
 
-## ⭐ The six findings that change what the next session does
+## ⭐ The five findings that change what the next session does
 
-1. ⛔ **A free runner moves by 42 percent between jobs and under 1 percent
-   within one.** The same command on the same image: 2927 ms on one runner,
-   4157 ms on another, each a median of five. ⭐ **That is eight times the gate
-   `PERF-03` has to measure**, so a ratio built from two different jobs cannot
-   see it at all. Both sides in the same job, or the number means nothing.
-2. ⛔ **A free runner cannot use `/dev/kvm`, and every obvious way of checking
-   says it can.** The node arrives as `crw-rw---- nobody nobody`, the process is
-   root only inside a user namespace, and ⛔ **`test -r` and `test -w` both
-   answer yes anyway**, because for uid 0 they are not a permission check. The
-   emulator's `open` is, and it fails. ⚠ **This was published twice with the
-   wrong mechanism before the container's own view was read**: first as
-   "acceleration is slower on CI", then as "the image never tried". It tries,
-   fails in under a second, and falls back. On the laptop it halves the time.
-3. ⛔ **The guest's emulated network is slow enough to dominate anything that
-   uses it.** Fetching one compiler through it took longer than every other
-   step in the image build put together and did not finish inside a runner's
-   hour. The same file over the container's own network takes seconds. ⚠ **Any
-   benchmark that resolves dependencies is measuring the network.**
-   ⛔ **And moving the fetch out did not make the step fast**, which is `INF-09`
-   and is still unexplained: three guesses were tested and all three are dead.
-4. ⭐ **The guest's root filesystem is ext2, not FFS**, which is why it can be
-   grown and written into from Linux with no BSD anywhere. That is what made a
-   compiler in the image possible at all: the published userland has 201 MB
-   free and the compiler needs 490 MB.
-5. ⛔ **A device declared after its backend is accepted, starts, and never
-   reaches the guest.** `-netdev` then `-device` gives a guest with no network
-   interface and no error anywhere. Reversed, it attaches.
-6. ⛔ **The shared console driver returns the right answer late, always.** It
-   decides a command has finished by counting prompts with a pattern that can
-   only ever match once. Filed as `INF-08` rather than patched in passing.
+1. ⛔ **`ktrace` is not usable on this guest, and the binary is right there.**
+   `ktrace(2)` is not compiled into the smolBSD kernel. ⚠ `INF-09`'s own
+   approach section asked for a ktrace, so an entry can name an instrument that
+   does not exist and nothing catches it. ⭐ **A tool being present is not an
+   instrument being available.**
+2. ⭐ **SIGINFO is the instrument for a guest whose userland has stopped**,
+   because the kernel answers it. Ctrl-T over 1,404 seconds of `pkg_add`:
+   **user time frozen at 15.78 s while system time climbed to 1,382 s**, and
+   resident size never moved. ⛔ Not blocked on IO, not working in userland: in
+   the kernel, burning a whole CPU, not coming back.
+3. ⛔ **The guest's whole userland stops being scheduled, not just the writer.**
+   A shell builtin `echo` produced nothing for 300 seconds, twice; thirty forked
+   `sleep 30` calls took over 1,500 seconds of wall clock. ⚠ **Every instrument
+   that is a program is unusable here**, which is why the first probe was
+   starved out twice and is committed as a negative result.
+4. ⛔ **It is not memory.** Rerun with three times the RAM and 2,881 MB free by
+   the guest's own `top`: no output in 2,700 seconds. ⚠ The working set is about
+   a gigabyte either way.
+5. ⛔ **The 28-reference sweep in `HISTORY/references/` was never reachable from
+   the work.** Every citation to it outside `HISTORY/` arrived in the first
+   commit; exactly one later session drew on it. ⚠ **A session hand-wrote a
+   provisioning mechanism that smolBSD already ships** as `smoler.sh`.
 
 ---
 
@@ -98,40 +75,33 @@ fact, one home.
 
 ⚠ **Every one was found by running, not by reading.**
 
-- ⛔ **A wait that matched the previous command's marker.** The console search
-  scans the whole buffer, so the second command in a session returned instantly
-  with a chunk holding no exit status. That reads as a guest that ran the
-  command and said nothing.
-- ⛔ **An accelerator probe reading a stream that had already been discarded.**
-  It reported `unreported` over a run that had said exactly what it did.
-- ⛔ **A guest stopping in single user mode with a read only root**, which
-  surfaced two steps later as a package manager that could not write, naming
-  the file rather than the cause.
-- ⛔ **Two conditions written as `A && B || C`**, which passed the linter on
-  this machine and were refused by the one on CI. The repository already knows
-  that shape is not if-then-else.
-- ⛔ **A confident explanation that was wrong, in an entry filed the same
-  hour.** `INF-09` first said the slow step was tens of thousands of small
-  files. The package holds 1,664. ⚠ **It was corrected in place with the wrong
-  version kept**, because each dead guess would have sent the fix somewhere
-  different.
-- ⛔ **A second explanation, for a different thing, wrong twice.** What
-  `/dev/kvm` does on a runner was published as a speed result, then as a
-  permission result, and is neither until the container's own view of the device
-  is read. ⭐ **The pattern is the same both times**: a tidy mechanism invented
-  to fit a number, instead of a reading taken.
+- ⛔ **A probe whose failure mode was the same shape as the fault.** It sampled
+  by typing at the console, the guest stopped draining its input, and
+  `Console.send()` blocked on the write with no timeout. Ten minutes, one `ps`
+  outstanding, no output. Filed as `INF-10` rather than patched.
+- ⛔ **`os.environ.get(name, default)` over a variable that is SET AND EMPTY.**
+  The wrapper passed `-e PROBE_CMD=`, so the default never applied and the
+  driver ran `exec` with no command, which in `sh` applies the redirections and
+  returns 0. ⚠ **A run that forks a job, prints a pid, writes nothing and uses
+  no CPU is indistinguishable from the frozen guest being investigated.**
+- ⛔ **A driver that parsed and did not say what was meant.** Nothing read the
+  file back. It does now, and the command is confirmed running before anything
+  is believed.
+- ⛔ **A guard with an exemption for the one file most likely to break it.**
+  `tests/run.sh` excluded `TODO/bsd.md` from the measured-numbers check. The
+  exemption is gone and the check was seen to fail with the number planted.
 
 ---
 
 ## ⚠ What was NOT measured, so it is not claimed
 
-- ⛔ **Throughput inside the guest.** ⚠ **Half of it is measured**: the Linux
-  side of the compile comparison is 27 seconds for `cc -O2 -c sqlite3.c`. The
-  guest side needs a compiler installed in the image, which is `INF-09`, and a
-  ratio with one side is not a ratio.
-- ⛔ **Whether acceleration would help on a runner**, because it was never on
-  there. What is measured is that it cannot be turned on by handing in the
-  device alone.
+- ⛔ **Which loop inside NetBSD's `ext2fs` is spinning.** What is measured is
+  that the destination filesystem decides the outcome, that all the time is
+  kernel time, and what the geometry is. ⛔ **The mechanism is not read**, and
+  this repository has twice published one invented to fit a number.
+- ⛔ **That a 4 KB block size fixes it.** That is the next control and it has
+  not been run.
+- ⛔ **Throughput of anything.** The Linux side of the compile comparison is
+  27 seconds and the guest side still needs a compiler in the image.
 - ⚠ **Any host other than one Windows laptop and one GitHub runner.**
 - ⛔ **arm64 or macOS.** Not attempted. All artefacts are amd64.
-- ⚠ **Whether a consumer can get anything out of the guest.** They cannot yet.

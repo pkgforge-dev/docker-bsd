@@ -90,6 +90,12 @@ result is re-parsed. A probe loop over a variable reached the guest as an empty
 string and printed nothing, which looked exactly like "none of these tools are
 installed".
 
+⚠ **That command reads the podman machine, which is the one WSL distribution
+this repository talks to directly.** ⛔ **Any OTHER Linux a session needs on
+this host is built with `wsl-ephemeral.ps1` and thrown away again**, rather than
+installed and kept. [`vendored.md`](vendored.md) carries the rule and the three
+things it does not cover.
+
 ---
 
 ## What is deliberately not required

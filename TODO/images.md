@@ -8,6 +8,24 @@ today and the one gesture a consumer expects.
 [`../docs/LIMITS.md`](../docs/LIMITS.md), never from an opinion about what ought
 to exist.
 
+
+### ⭐ Prior art already read, and it is in this repository
+
+⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+[`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
+verdicts and the ranking;
+[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
+commands. ⚠ **A session that designs before reading the sections named below is
+re-deriving work that is already on disk**, which has happened here at least
+once and is recorded under `INF-09`.
+
+| the entry | read, by section |
+| --- | --- |
+| `IMG-01`, `IMG-02` | ⭐ `usable.md`, the `R7` `smolBSD` section. It is the upstream of the image this repository publishes, and it ships **`smoler.sh`, a Dockerfile-shaped builder in which `RUN` works inside the guest**. ⛔ `findings.md`'s `R7` verdict records 83 tracker items and 51 threads, of which **two** were read |
+| `IMG-01`, distribution | ⭐ `usable.md`, `R7`'s registry section: a raw bootable disk pushed through `oras`. ⚠ It carries the Windows trap too: `oras` writes a **zero-byte file** because a tag contains a colon, and neither errors nor sanitises |
+| `IMG-03`, a shared filesystem | ⛔ `usable.md`'s `honest-limit` row on NetBSD's `mount_psshfs`: 30-second attribute caching over the page cache, and object files read back `file too short` under a parallel build. **NFS or a local disk with copy-back**, not psshfs |
+| `IMG-03`, and what an image ought to be | `findings.md`, the `R24` `oci-jails` row, whose `CATALOG.md` maps every FreeBSD OCI image source, and the `R4` `cbsd_oci.md` verdict: "OCI is an image standard, it does not regulate how exactly to work with the image" |
+
 ---
 
 ## IMG-01. `podman run --rm -it <image> sh` drops you in a BSD

@@ -268,6 +268,11 @@ rather than warns, over every tracked text file.
   and scoop's are `.ps1`. `Process.Start` with `UseShellExecute` false throws
   "not a valid application for this OS platform" on a `.ps1` and refuses a
   `.cmd`. Route a `.ps1` to a PowerShell host and a `.cmd` to `cmd.exe`.
+- ⛔ **A session that needs WSL builds one with `wsl-ephemeral.ps1`, and does
+  not use whichever distribution is lying around.** The rule and what it does
+  not cover are in [`../vendored.md`](../vendored.md); it is not restated here.
+  ⚠ **The traps below still apply to it**, because they are `wsl.exe`'s and
+  that script is a caller of `wsl.exe` like any other.
 - ⚠ **`wsl.exe` writes UTF-16LE**, which a redirected stdout reads as empty or
   as mojibake. `WSL_UTF8=1` fixes it.
 - ⛔ **A payload handed to `wsl.exe -- /bin/sh -lc` does NOT keep its quoting,

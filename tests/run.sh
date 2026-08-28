@@ -141,12 +141,18 @@ fi
 # else. A second copy is a copy that will disagree, and the one a reader trusts
 # is the wrong one. ⚠ The experiments and HISTORY are exempt: an experiment
 # PRINTS its own measurement, and HISTORY is the record of when it was taken.
+#
+# ⛔ TODO/bsd.md USED TO BE EXEMPT AND IS NOT ANY MORE. The exemption existed
+# because that file had grown into a chronological record carrying its own
+# measurements. On 2026-08-28 the record moved to HISTORY/bsd-entries.md and the
+# entry file was left carrying current facts, so the carve-out went with it.
+# ⚠ A guard with an exemption for the one file most likely to break it is not a
+# guard; removing the exemption is the point of the move.
 numbers='2\.6 s|0\.6 s|113\.6|108\.2|1\.8 s'
 leak=$(git ls-files '*.md' \
   | grep -v '^docs/LIMITS.md$' \
   | grep -v '^experiments/' \
   | grep -v '^HISTORY/' \
-  | grep -v '^TODO/bsd.md$' \
   | while read -r f; do
       if grep -qE "$numbers" "$f" 2>/dev/null; then printf '%s ' "$f"; fi
     done)
@@ -237,12 +243,24 @@ fi
 # ⚠ IT COMPARES THE VALUE, NOT THE SPELLING. "9" and "Nine" are the same claim,
 # and a check that rejected one of them would be enforcing a house style while
 # calling itself a correctness check. The defect is two documents DISAGREEING.
+#
+# ⛔ THE TABLE RAN OUT AT TEN AND THE CHECK FAILED A CORRECT DOCUMENT.
+# Measured 2026-08-28: the tree reached eleven experiments, the changelog said
+# `Eleven`, and this reported `documents claim [Eleven], tree has 11`. ⚠ That is
+# the check enforcing a house style while calling itself a correctness check,
+# which is the exact thing the paragraph above says it must not do. The table is
+# longer now, and a word it still cannot read is reported AS a word it cannot
+# read rather than compared as if it were a number.
 word_to_number() {
   case "$1" in
-    [Oo]ne) echo 1 ;;   [Tt]wo) echo 2 ;;    [Tt]hree) echo 3 ;;
-    [Ff]our) echo 4 ;;  [Ff]ive) echo 5 ;;   [Ss]ix) echo 6 ;;
-    [Ss]even) echo 7 ;; [Ee]ight) echo 8 ;;  [Nn]ine) echo 9 ;;
-    [Tt]en) echo 10 ;;  *) echo "$1" ;;
+    [Oo]ne) echo 1 ;;      [Tt]wo) echo 2 ;;       [Tt]hree) echo 3 ;;
+    [Ff]our) echo 4 ;;     [Ff]ive) echo 5 ;;      [Ss]ix) echo 6 ;;
+    [Ss]even) echo 7 ;;    [Ee]ight) echo 8 ;;     [Nn]ine) echo 9 ;;
+    [Tt]en) echo 10 ;;     [Ee]leven) echo 11 ;;   [Tt]welve) echo 12 ;;
+    [Tt]hirteen) echo 13 ;; [Ff]ourteen) echo 14 ;; [Ff]ifteen) echo 15 ;;
+    [Ss]ixteen) echo 16 ;; [Ss]eventeen) echo 17 ;; [Ee]ighteen) echo 18 ;;
+    [Nn]ineteen) echo 19 ;; [Tt]wenty) echo 20 ;;
+    *) echo "$1" ;;
   esac
 }
 
@@ -258,7 +276,17 @@ if [ "$claimed" = "$actual " ]; then
 elif [ -z "$claimed" ]; then
   bad "no document states the experiment count. reproduce: grep -rn 'experiments\*\*' CHANGELOG.md TODO/"
 else
-  bad "documents claim [$claimed], tree has $actual. reproduce: grep -rn 'experiments\*\*' CHANGELOG.md TODO/"
+  # ⛔ SAY WHICH OF THE TWO FAILURES THIS IS. A count this cannot read and a
+  # count that disagrees are different defects with different fixes, and
+  # reporting both as "documents claim X" sent one session to edit a correct
+  # document.
+  unreadable=$(printf '%s' "$claimed" | tr ' ' '\n' \
+               | grep -vE '^[0-9]*$' | tr '\n' ' ')
+  if [ -n "$unreadable" ]; then
+    bad "the experiment count is spelled in a word this check cannot read: $unreadable. Extend word_to_number in this file, or write the digit"
+  else
+    bad "documents claim [$claimed], tree has $actual. reproduce: grep -rn 'experiments\*\*' CHANGELOG.md TODO/"
+  fi
 fi
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

@@ -117,6 +117,28 @@ the same shell, which is what proves it.
 | ⭐ `netbsd:latest` | rescue. A shell and `sysctl` | **155 MB** | ⭐ **2927 ms** and **4157 ms** |
 | `netbsd:build` | ⭐ **real**, with `uname`, `make`, `pkg_add` and `pkgin` | **2291 MB**, grown to hold a toolchain | **13137 ms** and **12959 ms** |
 
+### ⭐ Where the 155 MB goes, which is what `OPT-02` needs and did not have
+
+Measured 2026-08-28 with `du -sx` inside the published image. ⛔ **Only a fifth
+of it is the BSD.**
+
+| what | on disk | what it is |
+| --- | --- | --- |
+| ⭐ `/guest` | **29.4 MB** | the guest kernel and root filesystem. ⛔ **The irreducible part** |
+| ⛔ `/usr/lib/python3.12` | **30.2 MB** | the interpreter for the driver |
+| `/usr/bin/qemu-system-x86_64` | 24.6 MB | one emulator binary, built to emulate anything |
+| `/usr/share/qemu` | 16.8 MB | firmware and ROM blobs. ⚠ A `microvm` guest loads almost none of them |
+| everything else | about 53 MB | the base, its libc, and the rest of the emulator's dependencies |
+
+⛔ **The driver those 30.2 MB exist to run is 15 KB of source**: `console.py` at
+5,674 bytes, `guest.py` at 8,417, and `entrypoint.sh` at 1,554. ⚠ On a `scratch`
+base there is no `python3` **and no `/bin/sh`**, so all three become one static
+binary or none of them ship.
+
+⚠ **This is a size measurement and not a recommendation.** `OPT-02` owns the
+decision and [`../TODO/PROGRESS.md`](../TODO/PROGRESS.md) says no `OPT` lever is
+pulled before `PERF-02` says which layer is actually stuck.
+
 ### ⛔ TWO NUMBERS PER ROW, AND THAT IS THE MOST IMPORTANT THING ON THIS PAGE
 
 ⚠ **Those pairs are two runs of the same command on the same image, hours
@@ -147,8 +169,28 @@ the other would be inventing a number.
 
 ⛔ **The build variant costs three times as long to reach a shell and is
 fifteen times the size**, and that is the price of a userland that can do
-something rather than answer. ⚠ **It does not yet contain a compiler**: see
-`INF-09`, which is about a provisioning step that does not finish.
+something rather than answer.
+
+### ⛔ AND YOU CANNOT WRITE ANYTHING LARGE INTO IT. Measured 2026-08-28
+
+⚠ **This is the limit a consumer of the build variant actually hits**, and it
+has nothing to do with the package manager.
+
+| the same 490 MB, the same 1,664 files, in the same guest | result |
+| --- | --- |
+| `tar` onto the guest's **root filesystem** | ⛔ **had not finished after 900 s**, and `pkg_add` has been watched not finishing for 45 minutes |
+| `tar` into a **tmpfs** mounted in that guest | ⭐ **finished** |
+
+⭐ **So it is the filesystem, not the writer and not the emulator.** The guest
+root is ext2 with **1 KB blocks over 2 GB and no features at all**, because
+this repository grows a small published image with `resize2fs`, which cannot
+change a block size. ⛔ **The process spends 100 percent of its time in the
+kernel and executes no userland instruction for the whole run.** `INF-09` in
+[`../TODO/infrastructure.md`](../TODO/infrastructure.md) carries the readings
+and the eight explanations that are dead.
+
+⚠ **So the build variant has a package manager, a network and no compiler**,
+and installing one is what does not finish.
 
 ### ⛔ `--device /dev/kvm` does NOT accelerate anything on a free runner
 

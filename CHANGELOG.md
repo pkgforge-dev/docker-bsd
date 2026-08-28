@@ -21,6 +21,41 @@ entry. A superseded one is amended in place with a dated note.
 
 ## 2026-08-28
 
+### 2026-08-28T05:30:00Z: the slow step has a cause, and the research nobody read now reaches the work
+
+**Record:** `INF-09` in [`TODO/infrastructure.md`](TODO/infrastructure.md), with
+the two controls and the kernel's own reading; the seconds and the geometry in
+[`docs/LIMITS.md`](docs/LIMITS.md).
+**Deployed:** ⛔ **no.** Nothing was published. The image is unchanged and the
+fix that follows from this has not been built.
+
+⛔ **Eight explanations for `INF-09` were dead and every one was inferred from
+outside the guest.** Two controls settle it: the same 490 MB written by plain
+`tar` does not finish on the guest's ext2 root and does finish in a tmpfs in the
+same guest, so it is neither `pkg_add` nor the guest.
+
+- ⭐ **The kernel was asked, because userland had stopped answering.** SIGINFO
+  over 1,404 seconds: user time frozen at 15.78 s while system time climbed to
+  1,382 s. ⛔ Spinning in the kernel, not waiting on IO.
+- ⛔ **`ktrace` is not usable on this guest.** The binary is in the userland and
+  `ktrace(2)` is not in the kernel, and the entry's own approach had asked for
+  it.
+- ⛔ **`TODO/bsd.md` was 893 lines of corrections to corrections.** The
+  reasoning moved verbatim to
+  [`HISTORY/bsd-entries.md`](HISTORY/bsd-entries.md); the entry file is 155
+  lines of current facts.
+- ⛔ **The 28-reference sweep was reachable only from a routing row nobody had
+  reason to take.** Every `TODO/` file now names the sections that bear on its
+  entries, and the router sends you there before you design anything.
+- ⭐ **Two guards tightened and both seen to fail**: `tests/run.sh` lost its
+  `TODO/bsd.md` exemption, and its count check no longer fails a correct
+  document over a spelling it cannot read.
+- ⛔ **One new defect filed, `INF-10`**: `Console.send()` blocks forever against
+  a guest that has stopped draining its console, which is the fault this
+  session was investigating wearing the instrument's clothes.
+
+---
+
 ### 2026-08-28T00:40:00Z: an image that boots, published, and a second one with a compiler in it
 
 **Record:** `IMG-01` in [`TODO/images.md`](TODO/images.md), closed in place with
@@ -133,9 +168,15 @@ what changed on the way in.
   unelevated, with no nesting, and a container running inside it on `ocijail`.
 - ⛔ **A long-running Go daemon panics that guest's kernel** in `_umtx_op`, so
   the podman client cannot reach it yet. Everything underneath that works.
-- ⛔ **Nine experiments**, each committed with its result, including the two
+- ⛔ **Eleven experiments**, each committed with its result, including the two
   that failed, the one that reported a false success, and an explanation that
   was published and withdrawn in the same session.
+  ⚠ **Amended 2026-08-28**: it said nine, which was true when it was written.
+  ⛔ **This bullet is not a historical claim, it is a live count**, checked
+  against the tree by `tests/run.sh`, so it moves whenever an experiment is
+  added. The tenth and eleventh belong to a later session and not to this one,
+  and a live count living inside a dated entry is the defect underneath this
+  note.
 - ⭐ **The gate, the conventions, the methodology and the record are this
   repository's own**, adapted rather than fetched, so a clone reproduces every
   measurement with nothing else checked out.

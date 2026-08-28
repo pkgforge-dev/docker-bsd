@@ -19,6 +19,7 @@ and it is the only file that carries one.
 | path | what it is |
 | --- | --- |
 | [`poc.md`](poc.md) | ⭐ the proof of concept. Every measurement behind the image-building half, with the commands that produced it |
+| [`bsd-entries.md`](bsd-entries.md) | ⛔ **how `BSD-01` and `BSD-02` reached their current answers**, in the original wording: the ranking table, the ruling that reopened it, the contradiction, and six sections headed `Correction:`. Moved out of `../TODO/bsd.md` on 2026-08-28 so that file could carry current facts |
 | [`misc/`](misc/) | session records and the orientation prompt |
 | [`references/`](references/) | ⭐ 28 external projects mined, with verdicts, a ranking, and the commands worth stealing |
 | [`reviews/`](reviews/) | ⭐ deep reviews, **numbered by the reader each one imagines**. Each says what it swept, what it found, and ⛔ what it did NOT look at |
@@ -42,6 +43,8 @@ about; a review named after a person finds what that person would trip over.
 | [`reviews/7-does-this-project-deserve-to-exist.md`](reviews/7-does-this-project-deserve-to-exist.md) | ⛔ a skeptic who already has a cross toolchain and is asking why they would switch |
 | [`reviews/8-somebody-who-runs-the-published-image-and-nothing-else.md`](reviews/8-somebody-who-runs-the-published-image-and-nothing-else.md) | ⭐ a developer who ran one command and will never open this repository. Everything they learn, they learn from the image's behaviour |
 | [`reviews/9-somebody-auditing-what-this-image-pulls-in.md`](reviews/9-somebody-auditing-what-this-image-pulls-in.md) | ⛔ a person approving this for a team, asking what it downloads and whom it trusts |
+| [`reviews/10-somebody-who-has-to-trust-this-sessions-instruments.md`](reviews/10-somebody-who-has-to-trust-this-sessions-instruments.md) | ⛔ a reader who notices that every conclusion came out of a tool written the same day, against a fault nobody understood |
+| [`reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md`](reviews/11-somebody-who-mined-28-projects-and-watched-nobody-read-them.md) | ⛔ the person who spent a day reading other people's trackers, asking whether that day bought anything |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a
@@ -66,10 +69,10 @@ in no README anywhere.
 
 ---
 
-## ⛔ Three corrections this repository has published about itself
+## ⛔ Four corrections this repository has published about itself
 
 ⚠ Listed here because a reader who trusts a document without checking this page
-will trust three sentences that are wrong.
+will trust four sentences that are wrong.
 
 1. **"There is no counterpart presenting BSD syscalls on a Linux kernel."**
    One was built and abandoned in 2022. ⭐ The conclusion holds and the
@@ -80,8 +83,12 @@ will trust three sentences that are wrong.
    machine was. [`references/usable.md`](references/usable.md).
 3. **"The guest's clock is why Go binaries die."** ⛔ Withdrawn inside the same
    session that published it. The clock measurably works and the fault is
-   elsewhere. [`../TODO/bsd.md`](../TODO/bsd.md).
+   elsewhere. [`bsd-entries.md`](bsd-entries.md).
+4. **"Installing a compiler into the guest is slow because of X."** ⛔ Eight
+   values of X, published and withdrawn one at a time. It is none of them: the
+   destination filesystem decides whether the write finishes at all.
+   `INF-09` in [`../TODO/infrastructure.md`](../TODO/infrastructure.md).
 
-⭐ **All three were caught by a review or a later measurement, not by anything
+⭐ **All four were caught by a review or a later measurement, not by anything
 running.** That is the argument for [`../docs/methodology/reviews.md`](../docs/methodology/reviews.md)
 in one sentence.

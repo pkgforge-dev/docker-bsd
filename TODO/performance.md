@@ -10,6 +10,23 @@ does not get adopted.
 
 [`INDEX.md`](INDEX.md) is the list; [`PROGRESS.md`](PROGRESS.md) is the order.
 
+
+### ⭐ Prior art already read, and it is in this repository
+
+⛔ **28 projects were mined on 2026-08-27, with their trackers.**
+[`../HISTORY/references/findings.md`](../HISTORY/references/findings.md) has the
+verdicts and the ranking;
+[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md) has the
+commands. ⚠ **A session that designs before reading the sections named below is
+re-deriving work that is already on disk**, which has happened here at least
+once and is recorded under `INF-09`.
+
+| the entry | read, by section |
+| --- | --- |
+| `OPT-02`, a purpose-built emulator | ⭐ `findings.md`, the `R18` `anyvm` verdict: which QEMU accelerator paths exist per host, and ⛔ that **Windows QEMU ships WHPX in `qemu-system-x86_64.exe` only** |
+| `OPT-03`, is a VM the right shape | ⭐ `usable.md`, the `R26` `bsdkrun` section, which is an OCI image booted as a microVM on `libkrun` and the closest published thing to this repository's shape, plus `R11` and `R13` for Firecracker. ⛔ And `findings.md`'s `R28` verdict, which is why "no virtual machine at all" is already a dead row here |
+| `PERF-02`, a real build in a guest | ⛔ `usable.md`'s `honest-limit` row on `mount_psshfs`: a parallel build over it reads back **truncated object files**. Any benchmark that shares a source tree that way is measuring corruption |
+
 ---
 
 ## PERF-02. Two users, one program, one matrix
@@ -160,6 +177,24 @@ whole distribution rather than for this.
 
 ⛔ **This image has exactly one job.** It emulates one architecture, boots one
 kind of guest, and runs no other program.
+
+### ⭐ It is measured now, and the largest single item is not the emulator
+
+⛔ **Only a fifth of the image is the BSD.** The full breakdown is in
+[`../docs/LIMITS.md`](../docs/LIMITS.md) section 1b and is not repeated here.
+The two facts that decide this entry's order of work:
+
+- ⛔ **The interpreter is bigger than the emulator binary**, and it exists to
+  run **15 KB** of driver source.
+- ⚠ **A `scratch` base removes `/bin/sh` as well as `python3`**, so
+  `entrypoint.sh`, `guest.py` and `console.py` become **one static binary or
+  none of them ship**. That is a rewrite, not a base change.
+
+⛔ **And it has a cost that is not size.**
+[`../experiments/lib/console.py`](../experiments/lib/console.py) is this
+repository's single POSIX copy of two measured tty rules, and `tests/run.sh`
+asserts its PowerShell twin carries the same two. A third implementation is a
+third place for a rule that has already been got wrong once.
 
 ### Approach
 

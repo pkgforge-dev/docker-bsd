@@ -146,6 +146,8 @@ comment line beginning with the tool's own name is parsed as a directive.
 | [`40-drive-freebsd-podman.ps1`](40-drive-freebsd-podman.ps1) | Does a container run **inside** that guest, which is the gesture `BSD-01` opens with | ⭐ **yes**, `rc=0`, after three corrections. See findings 5 and 6 |
 | [`41-connect-podman-from-windows.ps1`](41-connect-podman-from-windows.ps1) | Does the **Windows** podman client reach it, which is `BSD-01`'s acceptance | ⚠ ssh and the connection work; ⛔ the podman **daemon** does not stay up. See finding 7 |
 | [`35-boot-in-container.sh`](35-boot-in-container.sh) | ⭐ **What can a host with only a container engine do?** | ⭐ **a BSD shell in 2.6 s**, unprivileged. 0.6 s with `/dev/kvm`. See finding 8 |
+| [`42-probe-pkg-add-inside-guest.sh`](42-probe-pkg-add-inside-guest.sh) | ⛔ **`INF-09`: is `pkg_add` spinning or waiting?** Every explanation so far was inferred from OUTSIDE the guest | ⚠ **a negative result, committed.** Every instrument in it is a program, and this guest starves programs. See finding 9 |
+| [`43-siginfo-the-stuck-guest.sh`](43-siginfo-the-stuck-guest.sh) | ⭐ **The same question, asked of the KERNEL.** Ctrl-T needs no userland to be scheduled | ⭐ **it answered.** Spinning in the kernel, and it is the filesystem. See finding 9 |
 | [`lib/console.ps1`](lib/console.ps1) | not an experiment | the shared serial-console driver for the Windows half. ⛔ One copy, so `33`, `40` and `41` cannot diverge |
 | [`lib/console.py`](lib/console.py) | not an experiment | ⛔ the same driver, POSIX side, carrying the same two measured tty rules |
 
@@ -434,6 +436,63 @@ the highest-value open task.
 reported `answered=no` over a guest answering perfectly through `sysctl`, because
 the rescue image ships no `uname`. ⭐ Assert with something the guest
 actually has, and confirm what that is before writing the assertion.
+
+
+### 9. ⭐ Ask the kernel when userland has stopped answering
+
+⛔ **`INF-09` had eight dead explanations and every one was a guess at one
+word**: whether the process was spinning or waiting. Nothing outside the guest
+can see that word, and inside the guest nothing could run.
+
+⛔ **The guest starves programs.** A shell builtin `echo` produced nothing for
+300 seconds, twice. Thirty forked `sleep 30` calls took over 1,500 seconds of
+wall clock. ⚠ So `ps`, `top`, `vmstat`, `fstat`, a driver script and even a
+`kill` are all instruments that cannot be scheduled, which is what
+[`42-probe-pkg-add-inside-guest.sh`](42-probe-pkg-add-inside-guest.sh) is a
+record of.
+
+⛔ **And `ktrace` was never available**, though the binary is right there:
+
+```text
+ktrace: ktrace(2) system call not supported in the running kernel;
+        re-compile kernel with `options KTRACE'
+```
+
+⭐ **SIGINFO is answered by the line discipline, in the kernel.** Ctrl-T every
+45 seconds for 1,404 seconds:
+
+```text
+t=48    load: 0.41  cmd: pkg_add 2899   15.78u    26.88s 74% 13348k
+t=1404  load: 0.41  cmd: pkg_add 2899   15.78u  1382.68s 74% 13348k
+```
+
+⛔ **User time frozen, system time climbing one for one with the clock.** Not
+one userland instruction in 23 minutes.
+
+⭐ **And then a control, which is what actually named the culprit.** The same
+490 MB, by plain `tar`, in the same guest:
+
+```text
+-C /var/tmp   the ext2 root    still running at 900 s
+-C /mnt/t     a tmpfs          finished
+```
+
+⛔ **So it is neither `pkg_add` nor the guest. It is the filesystem**, which
+this repository made: `resize2fs` grew a small published image to 2 GB and
+cannot change its 1 KB block size. `INF-09` carries the geometry.
+
+### ⚠ Three rules this cost, and they are cheap to reuse
+
+- ⛔ **An instrument whose failure mode is the same shape as the fault is worse
+  than no instrument.** The first probe hung exactly as the fault does.
+- ⛔ **Prove the instrument on a healthy case first.**
+  [`43-siginfo-the-stuck-guest.sh`](43-siginfo-the-stuck-guest.sh) presses
+  Ctrl-T over a plain `sleep 30` before it presses it over anything else,
+  because a tty with `nokerninfo` answers with silence.
+- ⛔ **`os.environ.get(name, default)` cannot see the difference between absent
+  and empty.** A wrapper passing `-e VAR=` made a driver run `exec` with no
+  command, which returns 0, and the run looked exactly like the frozen guest.
+
 
 ---
 
