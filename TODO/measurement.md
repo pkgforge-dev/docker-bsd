@@ -63,6 +63,34 @@ the ratio is about the route, and the ratio is what transfers.
 ⚠ **And report IO separately from CPU.** They are the two costs and they are
 not the same multiple: the 108-second probe suggests IO is the worse one.
 
+
+### ⭐ MEASURED 2026-08-28: the guest side has a route, and it needed two fixes
+
+⛔ **This entry has been blocked on "the guest side needs a compiler in the
+image" and that was only half of the blocker.**
+
+| what was in the way | state |
+| --- | --- |
+| `pkg_add` never returns on the staged package | ⛔ **still true.** `INF-09`. ⭐ Worked around: `tar` puts the package in, in about half a minute, and `pkg_info` finds it |
+| ⛔ **the guest has no assembler and no system headers** | ⛔ **nobody had looked.** `/usr/bin/as`, `/usr/include/sys/cdefs.h` and `/usr/lib/libc.a` are all absent, so `gcc -c` stops at the first `#include` |
+
+⭐ **The second one is the `comp` set, which is the same gap this file already
+recorded for the CROSS sysroot above**, and the two were filed apart. NetBSD
+11.0's `comp.tar.xz` extracts into the guest root in about a minute and all
+three appear.
+[`../experiments/47-comp-set-and-compile.sh`](../experiments/47-comp-set-and-compile.sh)
+does both and then runs the workload.
+
+⚠ **The workload is unchanged and deliberately so**: `cc -O2 -c sqlite3.c`, the
+same bytes on both sides, with each side timing itself from the inside.
+[`../scripts/bench-compile`](../scripts/bench-compile) is the harness and the
+Linux half of the number is already in
+[`../docs/LIMITS.md`](../docs/LIMITS.md).
+
+⛔ **`bench-compile` will need one edit when the image ships this.** It runs
+`/usr/pkg/gcc14/bin/gcc` in the guest, which is right, and it has never had a
+guest that could answer.
+
 ### Prove
 
 A table in [`../docs/LIMITS.md`](../docs/LIMITS.md) with the workload named, the

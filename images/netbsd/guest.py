@@ -13,14 +13,18 @@ this image was built for. experiments/35-boot-in-container.sh measured them.
 this repository's single copy of two measured tty rules, and a driver written
 again here would be a second place for them to be wrong.
 
-⛔ IT DOES NOT USE Console.run(), AND THAT IS A DEFECT IN Console RATHER THAN A
-PREFERENCE HERE. run() decides a command has finished by counting prompts, and
-its prompt pattern is anchored with a dollar sign, which Python matches only at
-the end of the string. So the count is 0 or 1 and never rises, "one more prompt
-than before" never becomes true, and every call burns its whole timeout before
-returning the right answer late. Reproduced 2026-08-27 and filed as INF-08. The
-send and wait_for primitives underneath it are sound, and they are what this
-file uses.
+⛔ IT DOES NOT USE Console.run(), AND THAT IS NO LONGER BECAUSE run() IS BROKEN.
+It was: run() decided a command had finished by counting prompts, its pattern is
+anchored with a dollar sign, and Python matches that at the end of the string
+only, so the count never rose and every call returned the right answer after
+burning its whole budget. Reproduced 2026-08-27, filed as INF-08, fixed
+2026-08-28 by waiting for a prompt at or after a POSITION in the stream.
+
+⭐ THIS FILE STILL USES send AND wait_for DIRECTLY, AND FOR A BETTER REASON THAN
+A DEFECT: it needs the command's EXIT STATUS, which no prompt carries. It
+brackets the command with two markers the echo cannot contain and reads the
+status out of the second one. A prompt says a command ended; a marker says what
+it ended with.
 
 Two modes, chosen from the arguments and nothing else:
 
@@ -277,7 +281,14 @@ def run_line(con, command, seconds):
     """
     sent = 'echo "%s"; ( %s ); echo "%s"' % (OUT_TYPED, command, RC_TYPED)
     before = len(con.text)
-    con.send(sent)
+    # ⛔ A SEND THAT DID NOT FINISH IS NOT A COMMAND THAT WAS RUN. Console.send
+    # is bounded now, so it can say it only typed part of the line, and part of
+    # a line sitting in the guest's input queue is a real state: the next thing
+    # typed would continue it. INF-10. ⚠ The caller is told rather than left
+    # waiting for a status from a command the guest never saw.
+    if not con.send(sent):
+        return (["the console stopped accepting input part way through the "
+                 "command, so it was never run"], None, True)
     ok = wait_after(con, re.escape(RC_MARKER) + r"\d", before, seconds)
     chunk = con.text[before:]
     if not ok:

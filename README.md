@@ -63,15 +63,28 @@ with `--network none` and needs no privilege, no capability and no device.
 | tag | what is in it | state |
 | --- | --- | --- |
 | ⭐ `netbsd:latest` | a rescue userland. A shell and `sysctl`. ⛔ No `uname`, no `ls`, no compiler | ⭐ **published.** The command above pulls it |
-| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, a network, and a compiler package staged inside it ready to install | ⛔ **built and proved in CI, not yet published.** `IMG-02` |
+| `netbsd:build` | ⭐ a real userland: `uname`, `make`, `pkg_add`, `pkgin`, a network, and a compiler package staged inside it. ⛔ **It cannot compile yet**, see below | ⛔ **built and proved in CI, not yet published.** `IMG-02` |
 
 ⛔ **Do not write a `docker pull` for `netbsd:build` yet.** It does not exist in
 the registry, and a command in a README that returns a 404 is worse than no
 command.
 
-⚠ **The compiler is staged, not installed.** Installing it at build time was
-tried and does not finish, which is `INF-09` in [`TODO/INDEX.md`](TODO/INDEX.md)
-and is written up with what was ruled out.
+⚠ **The compiler is staged, not installed, and there are two reasons rather
+than one.**
+
+- ⛔ **`pkg_add` does not finish**, on this package, in this guest. It unpacks
+  every file and then stops, and the process spends the rest of its life in the
+  kernel. That is `INF-09` in [`TODO/INDEX.md`](TODO/INDEX.md), written up with
+  ten explanations of which nine are dead. ⭐ **Plain `tar` puts the same package
+  in, in about half a minute**, which is what the image will do.
+- ⛔ **And the guest has no assembler and no system headers.** `/usr/bin/as`,
+  `/usr/include/sys/cdefs.h` and `/usr/lib/libc.a` are all absent, so even a
+  correctly installed compiler stops at the first `#include`. ⚠ They are in
+  NetBSD's `comp` set, which nothing here fetches yet. Measured 2026-08-28 and
+  filed under `IMG-02`.
+
+⛔ **So do not expect to build anything in it today.** ⭐ Both halves are
+measured rather than suspected, and both have a named fix.
 
 ⛔ **What neither of them does yet:** `-v`, `-p` and `-e` reach the **container**
 and stop there. The BSD is a virtual machine inside it with its own filesystem,

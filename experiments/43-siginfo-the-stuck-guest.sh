@@ -126,8 +126,12 @@ def main():
     before = len(con.text)
     con.send("sleep 30", per_char=0.005)
     time.sleep(3)
-    con.proc.stdin.write(CTRL_T)
-    con.proc.stdin.flush()
+    # ⛔ send_raw, NOT proc.stdin.write. console.py sets the child's stdin
+    # non-blocking so that `send` can give up rather than park in the kernel
+    # (INF-10), and on a non-blocking fd a bare write returns None instead of
+    # blocking. ⚠ A press dropped that way is silence, which is exactly the
+    # reading this file is here to take.
+    con.send_raw(CTRL_T)
     con.pump(5.0)
     say("Ctrl-T over a plain `sleep 30` said:")
     print(con.text[before:], flush=True)
@@ -151,11 +155,9 @@ def main():
         con.pump(0.5)
         if time.monotonic() >= next_press:
             mark = len(con.text)
-            try:
-                con.proc.stdin.write(CTRL_T)
-                con.proc.stdin.flush()
-            except (BrokenPipeError, OSError) as exc:
-                say("the console went away: %s" % exc)
+            if not con.send_raw(CTRL_T):
+                say("the console would not take a Ctrl-T; the press is lost, "
+                    "not answered with silence")
                 break
             presses += 1
             con.pump(3.0)

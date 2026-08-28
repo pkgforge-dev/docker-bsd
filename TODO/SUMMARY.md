@@ -10,108 +10,87 @@ what to do.
 
 ---
 
-## 2026-08-28: measured `INF-09`, then read the source that explained it
+## 2026-08-28: repeated one control, and it took the answer away
 
 | row | before | after |
 | --- | --- | --- |
-| **Elapsed** | 2026-08-28T03:40:00Z | about 8 hours |
-| **`INF-09`** | ⛔ six dead explanations, all inferred from outside the guest | ⭐ **answered.** Two controls, and a reading taken by the kernel |
-| **Work** | 21 entries, 2 done | 22 entries, 2 done, one new defect filed |
-| **`TODO/bsd.md`** | ⛔ 893 lines of corrections to corrections | ⭐ **155 lines of current facts**, with the reasoning moved verbatim to `HISTORY/` |
-| **The 28-reference sweep** | ⛔ reachable only from a routing row nobody had reason to take | ⭐ **named, by section, from every `TODO/` file** |
-| **Checks** | 12-check gate, 50 tests | same, and ⭐ **two guards tightened, both seen to fail** |
-| **Experiments** | 9 | 11, one of them a committed negative result |
-| **References mined** | 28, in three sweeps | ⭐ **37, in four.** The fourth was run because the first three were never being read |
-| **BSDs targeted** | four | ⛔ **three.** DragonFly dropped, with its working route kept |
+| **`INF-09`** | ⭐ "answered": the destination filesystem decides | ⛔ **withdrawn.** Five destinations, all finish. `pkg_add` is the only suspect left |
+| **the 1 KB block size** | ⭐ the lever, and a rebuild was the next task | ⛔ **not the lever.** One `mke2fs -b` apart, both finish |
+| **a compiler in the guest** | ⛔ blocked on `pkg_add` | ⭐ **installs in 46 seconds with `tar`**, and `pkg_info` finds it |
+| **compiling in the guest** | ⚠ assumed to follow | ⛔ **it does not.** No `as`, no `sys/cdefs.h`, no `libc.a` |
+| **Work** | 22 entries, 2 done | 22 entries, ⭐ **4 done** |
+| **Experiments** | 11 | 15 |
+| **Reviews** | 14 | 16 |
+| **Corrections published about itself** | four | ⛔ **five**, and the fifth is a correction to the fourth |
 
 ---
 
-## ⭐ What was reached
+## ⛔ What was reached, and it is the opposite of a headline
 
-⛔ **`pkg_add` was never the problem, and neither was the guest.** Two controls,
-the same 490 MB, the same 1,664 files, in the same image, minutes apart:
+⛔ **The previous session's answer rested on one run of one control**, and this
+one repeated it. The same `tar`, the same archive, the same image, through the
+plain driver and through the instrument that took the original reading:
 
 ```text
-tar xpf /guest-package.tgz -C /var/tmp     onto the ext2 root   still running at 900 s
-tar xpf /guest-package.tgz -C /mnt/t       into a tmpfs          TMPFS-EXTRACT-DONE
+tar xpf /guest-package.tgz -C /var/tmp    onto the ext2 root    finished
 ```
 
-⭐ **It is the filesystem.** The guest root is ext2 with **1 KB blocks over
-2 GB and no features at all**, because this repository grows a small published
-image with `resize2fs`, and `resize2fs` cannot change a block size.
+⛔ **That is the run the record says had not finished after 900 seconds.**
+Five destinations were tried in the end: the real root, a fresh 1 KB
+filesystem, a fresh 4 KB one, the shipped root's own bytes as a data disk, and
+the same with the archive copied on first. **Every one of them finished.**
 
-⭐ **The sizes, the seconds and the geometry are in
-[`../docs/LIMITS.md`](../docs/LIMITS.md)** and the readings are in `INF-09`.
-They are not repeated here: one fact, one home.
+⭐ **So the eighth dead explanation is alive: it is `pkg_add`'s own work.** It
+reproduces every time, with the same signature the first reading took: user time
+frozen, system time climbing one second per second, resident size never moving.
 
-### ⛔ And then the source said why, which no measurement here could
-
-⭐ **smolBSD's `mkimg.sh` chooses the filesystem by the BUILD HOST**: `mke2fs -O
-none` when it is Linux, `newfs` when it is a BSD. ⛔ **And its comment says only
-the BUILDER image is ext2.** This repository ships that builder image as its
-runtime root. ⚠ **Found by re-mining a reference already on disk**, at the same
-commit as before.
+⭐ **And `pkg_add -v` says where it stops.** It prints every path in the package,
+reaches the last one alphabetically, and then says nothing for the rest of the
+run. ⛔ **The unpack finishes; the phase after it does not.**
 
 ---
 
 ## ⭐ The five findings that change what the next session does
 
-1. ⛔ **`ktrace` is not usable on this guest, and the binary is right there.**
-   `ktrace(2)` is not compiled into the smolBSD kernel. ⚠ `INF-09`'s own
-   approach section asked for a ktrace, so an entry can name an instrument that
-   does not exist and nothing catches it. ⭐ **A tool being present is not an
-   instrument being available.**
-2. ⭐ **SIGINFO is the instrument for a guest whose userland has stopped**,
-   because the kernel answers it. Ctrl-T over 1,404 seconds of `pkg_add`:
-   **user time frozen at 15.78 s while system time climbed to 1,382 s**, and
-   resident size never moved. ⛔ Not blocked on IO, not working in userland: in
-   the kernel, burning a whole CPU, not coming back.
-3. ⛔ **The guest's whole userland stops being scheduled, not just the writer.**
-   A shell builtin `echo` produced nothing for 300 seconds, twice; thirty forked
-   `sleep 30` calls took over 1,500 seconds of wall clock. ⚠ **Every instrument
-   that is a program is unusable here**, which is why the first probe was
-   starved out twice and is committed as a negative result.
-4. ⛔ **It is not memory.** Rerun with three times the RAM and 2,881 MB free by
-   the guest's own `top`: no output in 2,700 seconds. ⚠ The working set is about
-   a gigabyte either way.
-5. ⛔ **The 28-reference sweep in `HISTORY/references/` was never reachable from
-   the work.** Every citation to it outside `HISTORY/` arrived in the first
-   commit; exactly one later session drew on it. ⚠ **A session hand-wrote a
-   provisioning mechanism that smolBSD already ships** as `smoler.sh`.
-
----
-
-## ⛔ Four defects this session shipped and then caught
-
-⚠ **Every one was found by running, not by reading.**
-
-- ⛔ **A probe whose failure mode was the same shape as the fault.** It sampled
-  by typing at the console, the guest stopped draining its input, and
-  `Console.send()` blocked on the write with no timeout. Ten minutes, one `ps`
-  outstanding, no output. Filed as `INF-10` rather than patched.
-- ⛔ **`os.environ.get(name, default)` over a variable that is SET AND EMPTY.**
-  The wrapper passed `-e PROBE_CMD=`, so the default never applied and the
-  driver ran `exec` with no command, which in `sh` applies the redirections and
-  returns 0. ⚠ **A run that forks a job, prints a pid, writes nothing and uses
-  no CPU is indistinguishable from the frozen guest being investigated.**
-- ⛔ **A driver that parsed and did not say what was meant.** Nothing read the
-  file back. It does now, and the command is confirmed running before anything
-  is believed.
-- ⛔ **A guard with an exemption for the one file most likely to break it.**
-  `tests/run.sh` excluded `TODO/bsd.md` from the measured-numbers check. The
-  exemption is gone and the check was seen to fail with the number planted.
+1. ⭐ **A compiler goes into the guest in 46 seconds without `pkg_add`**, and
+   `pkg_info -e` finds it afterwards. A pkgsrc binary package is an archive with
+   `@cwd /usr/pkg` in its own `+CONTENTS` and nine `@ignore` metadata files that
+   belong in `/var/db/pkg/<pkgname>/`. ⛔ **`IMG-02` is assembly now, not
+   research.**
+2. ⛔ **And the guest still cannot compile, for a reason nobody had looked for.**
+   No `/usr/bin/as`, no `/usr/include/sys/cdefs.h`, no `/usr/lib/libc.a`. ⭐ The
+   `comp` set puts all three in, in about a minute. ⚠ **That gap was already
+   written down** under `PERF-01`, for a cross sysroot, and nobody had connected
+   it to the guest.
+3. ⛔ **The block size was one commit from being "fixed" without being
+   understood.** A fresh 1 KB filesystem with the shipped root's geometry takes
+   the archive in the same time a 4 KB one does, so the rebuild would have
+   worked, shipped, and been the tenth explanation.
+4. ⭐ **`INF-08` and `INF-10` are closed, and the two halves had different
+   answers.** The PowerShell console driver never had `INF-08`, because its
+   default prompt is unanchored; it had `INF-10` in full. ⛔ **A suite that ran
+   only the language the defect was filed against would have declared the pair
+   fixed.**
+5. ⛔ **Silence at a console is not a wedged guest.** Ctrl-T over an idle shell
+   prints nothing, so a command that finished and a command that stopped being
+   scheduled are the same picture unless the command carries its own completion
+   marker. ⚠ That is how a run that finished can be recorded as one that did
+   not.
 
 ---
 
 ## ⚠ What was NOT measured, so it is not claimed
 
-- ⛔ **Which loop inside NetBSD's `ext2fs` is spinning.** What is measured is
-  that the destination filesystem decides the outcome, that all the time is
-  kernel time, and what the geometry is. ⛔ **The mechanism is not read**, and
-  this repository has twice published one invented to fit a number.
-- ⛔ **That a 4 KB block size fixes it.** That is the next control and it has
-  not been run.
-- ⛔ **Throughput of anything.** The Linux side of the compile comparison is
-  27 seconds and the guest side still needs a compiler in the image.
+- ⛔ **What was different on the day the 900-second reading was taken.** The
+  console log was not kept and nobody can say from here. ⚠ **What is claimed is
+  only that it does not reproduce**, on the same image, with the same command,
+  through two instruments.
+- ⛔ **Which loop inside the kernel `pkg_add` is in after the unpack.**
+  `ktrace(2)` is not in this kernel and `pkg_install`'s source has not been read.
+- ⛔ **Whether `pkgin` is stuck too.** It ships in the image, it has never been
+  run, and assuming it shares `pkg_add`'s fate is a guess.
+- ⚠ **Whether NetBSD 11.0's `comp` set is right for a guest that reports
+  `smolBSD 11.0_STABLE`.** It compiles, which is not the same as being correct,
+  and `scripts/sources` pins 10.1 for a different purpose.
 - ⚠ **Any host other than one Windows laptop and one GitHub runner.**
 - ⛔ **arm64 or macOS.** Not attempted. All artefacts are amd64.

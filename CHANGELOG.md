@@ -21,6 +21,52 @@ entry. A superseded one is amended in place with a dated note.
 
 ## 2026-08-28
 
+### 2026-08-28T12:00:00Z: ran the control a second time, and it withdrew the answer
+
+**Record:** `INF-09`, `INF-08` and `INF-10` in
+[`TODO/infrastructure.md`](TODO/infrastructure.md); the withdrawn wording in
+[`HISTORY/inf-09.md`](HISTORY/inf-09.md); the seconds in
+[`docs/LIMITS.md`](docs/LIMITS.md); experiments 44 to 47.
+**Deployed:** ⛔ **no.** No image was built or published.
+
+⛔ **The headline of four documents was wrong, and one repeat of one control is
+what found it.** "The destination filesystem decides whether a 490 MB write
+finishes" rested on a single `tar` that was said not to finish in 900 s. Run
+again on the same image, through the plain driver and through the instrument
+that took the original reading, ⭐ **it finishes in about half a minute.**
+
+- ⛔ **`INF-09` corrected for the third time, and the eighth dead explanation is
+  alive.** `pkg_add -U` does not finish and plain `tar` of the same archive to
+  the same destination does. ⭐ **`pkg_add -v` says where it stops**: it prints
+  every path in the package, reaches the last one, and then goes silent while
+  the kernel reports user time frozen and system time tracking the wall clock.
+- ⛔ **The 1 KB block size is not the lever**, and this repository was one commit
+  from rebuilding the filesystem to fix it. Two ext2 filesystems one `mke2fs -b`
+  apart, same size, same features, same inode density, one guest each: both
+  finish. [`experiments/44-block-size-control.sh`](experiments/44-block-size-control.sh).
+- ⭐ **The compiler goes into the guest in 46 seconds without `pkg_add`**, and
+  `pkg_info` finds it afterwards. A pkgsrc binary package is an archive with a
+  known layout and `tar` is measured to handle it.
+  [`experiments/46-install-without-pkg-add.sh`](experiments/46-install-without-pkg-add.sh).
+- ⛔ **And then the compile failed in under two seconds, on a defect nobody had
+  looked for.** The build guest has no `sys/cdefs.h`, no `libc.a` and **no
+  `/usr/bin/as`**. ⚠ `TODO/measurement.md` already recorded that NetBSD's `comp`
+  set is not fetched, for a CROSS sysroot; it is the same gap inside the guest,
+  and nothing had connected the two.
+  [`experiments/47-comp-set-and-compile.sh`](experiments/47-comp-set-and-compile.sh).
+- ⭐ **`INF-08` and `INF-10` closed together**, which is how they were filed.
+  `Console.run()` waited for a prompt COUNT that a `$`-anchored pattern could
+  never raise, and `Console.send()` wrote with no budget at all. Both halves of
+  the driver now track a position and bound the write, and
+  [`tests/console-bounds.py`](tests/console-bounds.py) and
+  [`tests/console-bounds.ps1`](tests/console-bounds.ps1) were **seen to fail
+  first**, in both languages, against a fake guest that needs no emulator.
+- ⚠ **The two halves had different answers**, which is the argument for testing
+  both: the PowerShell side never had `INF-08`, because its default prompt is
+  unanchored, and it had `INF-10` in full.
+
+---
+
 ### 2026-08-28T08:00:00Z: read nine more projects, and one of them explained the bug
 
 **Record:** the fourth sweep in
@@ -201,15 +247,15 @@ what changed on the way in.
   unelevated, with no nesting, and a container running inside it on `ocijail`.
 - ⛔ **A long-running Go daemon panics that guest's kernel** in `_umtx_op`, so
   the podman client cannot reach it yet. Everything underneath that works.
-- ⛔ **Eleven experiments**, each committed with its result, including the two
+- ⛔ **Fifteen experiments**, each committed with its result, including the two
   that failed, the one that reported a false success, and an explanation that
   was published and withdrawn in the same session.
-  ⚠ **Amended 2026-08-28**: it said nine, which was true when it was written.
-  ⛔ **This bullet is not a historical claim, it is a live count**, checked
-  against the tree by `tests/run.sh`, so it moves whenever an experiment is
-  added. The tenth and eleventh belong to a later session and not to this one,
-  and a live count living inside a dated entry is the defect underneath this
-  note.
+  ⚠ **Amended 2026-08-28, twice**: it said nine, then eleven, each true when it
+  was written. ⛔ **This bullet is not a historical claim, it is a live count**,
+  checked against the tree by `tests/run.sh`, so it moves whenever an experiment
+  is added. Everything after the ninth belongs to a later session and not to
+  this one, and a live count living inside a dated entry is the defect
+  underneath this note.
 - ⭐ **The gate, the conventions, the methodology and the record are this
   repository's own**, adapted rather than fetched, so a clone reproduces every
   measurement with nothing else checked out.

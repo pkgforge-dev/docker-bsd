@@ -174,6 +174,43 @@ shape whose device probe dominated the boot on the other route, and
 3. ⭐ **compile something real and record the wall time**, against the same
    compile on the host, so the penalty is a ratio and not an adjective.
 
+
+### ⭐ MEASURED 2026-08-28: both halves of "install a compiler" are now known
+
+⛔ **There were two walls, not one, and only the first had been found.**
+
+| step | result |
+| --- | --- |
+| `pkg_add -U` the staged package | ⛔ **does not finish.** `INF-09`, and it unpacks everything before it stops |
+| ⭐ **`tar` the same package into `/usr/pkg` instead**, move its nine `@ignore` metadata files to `/var/db/pkg/<pkgname>/`, run its own `+INSTALL` | ⭐ **works, 46 seconds from boot.** `pkg_info -e` finds it and `gcc --version` answers |
+| then `gcc -O2 -c` anything | ⛔ **fails in under two seconds.** No `/usr/bin/as`, no `/usr/include/sys/cdefs.h`, no `/usr/lib/libc.a` |
+| ⭐ **extract NetBSD 11.0's `comp` set into the guest root first** | ⭐ **61 seconds**, and all three are then present |
+
+⭐ The recipe is
+[`../experiments/46-install-without-pkg-add.sh`](../experiments/46-install-without-pkg-add.sh)
+and
+[`../experiments/47-comp-set-and-compile.sh`](../experiments/47-comp-set-and-compile.sh);
+the seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md).
+
+### ⛔ What is left, and one of it is a question rather than work
+
+1. ⭐ **Bake both into [`../images/netbsd/Containerfile`](../images/netbsd/Containerfile).**
+   The `comp` set is fetched, verified and written into the guest root exactly
+   the way the package already is, by
+   [`../scripts/sources`](../scripts/sources) and
+   [`../images/netbsd/grow-rootfs.sh`](../images/netbsd/grow-rootfs.sh); the
+   provision stage stops calling `pkg_add` and runs the `tar` recipe instead.
+   ⚠ **The root is 81 percent full after both**, so `SMOL_BUILD_SIZE` has to
+   grow with them.
+2. ⛔ **A VERSION QUESTION, and it should be ruled on rather than absorbed.**
+   The guest reports `smolBSD 11.0_STABLE` and the set used is **NetBSD 11.0**;
+   `scripts/sources` pins **NetBSD 10.1** for the OCI userlands this repository
+   publishes. ⚠ Two NetBSD versions in one repository for two different purposes
+   is defensible and it is not currently written down anywhere as a decision.
+3. ⚠ **Say what the `tar` route gives up.** No dependency resolution: `gcc14`
+   declares none, which is why one file was ever enough, and the next package
+   will not be so kind.
+
 ### Prove
 
 ```bash

@@ -171,26 +171,66 @@ the other would be inventing a number.
 fifteen times the size**, and that is the price of a userland that can do
 something rather than answer.
 
-### ⛔ AND YOU CANNOT WRITE ANYTHING LARGE INTO IT. Measured 2026-08-28
+### ⛔ AND ITS PACKAGE MANAGER DOES NOT FINISH. Measured 2026-08-28
 
-⚠ **This is the limit a consumer of the build variant actually hits**, and it
-has nothing to do with the package manager.
+⚠ **This is the limit a consumer of the build variant actually hits.**
 
-| the same 490 MB, the same 1,664 files, in the same guest | result |
+```text
+pkg_add -U /guest-package.tgz      ⛔ never returns
+```
+
+⛔ **It is `pkg_add`, and it is not the filesystem, the block size, the
+emulator, the guest or the archive.** Six runs of the same 490 MB, 1,645-file
+archive, one freshly booted guest each so that none is charged for another's
+page cache:
+
+| the same archive, unpacked by plain `tar` onto | seconds, by the guest's own clock |
 | --- | --- |
-| `tar` onto the guest's **root filesystem** | ⛔ **had not finished after 900 s**, and `pkg_add` has been watched not finishing for 45 minutes |
-| `tar` into a **tmpfs** mounted in that guest | ⭐ **finished** |
+| the guest's **own ext2 root**, at `/var/tmp` | ⭐ **35** |
+| a fresh 2 GB ext2, `-O none`, **1 KB blocks**, on a second disk | ⭐ **35** |
+| the same, **4 KB blocks**, one `mke2fs` argument apart | ⭐ **32** |
+| the shipped root's **own bytes**, mounted as an ordinary data disk | ⭐ **34** |
+| the same, with the archive copied on first, so one filesystem carries the read and the write | ⭐ **34** |
+| **`pkg_add -U`** on that archive, into that root | ⛔ **does not finish** |
 
-⭐ **So it is the filesystem, not the writer and not the emulator.** The guest
-root is ext2 with **1 KB blocks over 2 GB and no features at all**, because
-this repository grows a small published image with `resize2fs`, which cannot
-change a block size. ⛔ **The process spends 100 percent of its time in the
-kernel and executes no userland instruction for the whole run.** `INF-09` in
-[`../TODO/infrastructure.md`](../TODO/infrastructure.md) carries the readings
-and the eight explanations that are dead.
+⭐ **Half a gigabyte goes into this guest's root filesystem in about half a
+minute.** ⛔ **The same bytes through `pkg_add` do not arrive at all**, and the
+kernel says why it cannot be waited out: user time frozen while system time
+climbs one second per second, with the resident size never moving.
 
-⚠ **So the build variant has a package manager, a network and no compiler**,
-and installing one is what does not finish.
+⚠ **This page said the opposite until today**, and said it in a table that
+looked exactly like the one above: that the destination filesystem decided
+whether the write finished. ⛔ **That control does not reproduce.** The
+withdrawn wording and the four controls that replaced it are in
+[`../HISTORY/inf-09.md`](../HISTORY/inf-09.md); the readings are in `INF-09` in
+[`../TODO/infrastructure.md`](../TODO/infrastructure.md).
+
+### ⛔ AND EVEN WITH A COMPILER IN IT, IT CANNOT COMPILE. Measured 2026-08-28
+
+⭐ **`tar` installs the compiler in 46 seconds from boot** and `pkg_info` finds
+it afterwards, so the package manager is not the last wall. ⛔ **The first
+`gcc -O2 -c` then fails in under two seconds**, and reading the guest says why:
+
+```text
+ls: /usr/bin/as: No such file or directory
+ls: /usr/include/sys/cdefs.h: No such file or directory
+ls: /usr/lib/libc.a: No such file or directory
+```
+
+⛔ **No assembler, no system headers, no static libc.** All three are in
+NetBSD's `comp` set, which nothing in this repository fetches: `scripts/sources`
+takes `base` and `etc`. ⚠ **That gap was already written down for a CROSS
+sysroot** in [`../TODO/measurement.md`](../TODO/measurement.md) and nobody had
+connected it to the guest.
+
+⭐ **The set fixes it, measured rather than assumed.** NetBSD 11.0's
+`comp.tar.xz`, which is the release the guest reports, extracts into the guest
+root in **61 seconds** and all three files are then present.
+[`../experiments/47-comp-set-and-compile.sh`](../experiments/47-comp-set-and-compile.sh).
+
+⚠ **So the build variant has a package manager, a network, a stageable compiler
+and no toolchain to run it against.** ⛔ `IMG-02` owns both halves and neither is
+in a published image yet.
 
 ### ⛔ `--device /dev/kvm` does NOT accelerate anything on a free runner
 

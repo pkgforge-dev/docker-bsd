@@ -24,6 +24,15 @@ FAIL=0
 ok()   { PASS=$((PASS + 1)); printf '  ok   %s\n' "$1"; }
 bad()  { FAIL=$((FAIL + 1)); printf '  FAIL %s\n' "$1"; }
 
+# ⛔ A SKIPPED CHECK IS NOT A PASSED CHECK, and it is not a failure of the tree
+# either. Everything above this line is pure sh and runs anywhere; the console
+# tests at the end need an interpreter, so they are the first thing here that a
+# host can genuinely be unable to run. ⚠ Counted and named separately, the way
+# scripts/common/check-gate.sh already does, so a host that ran nothing cannot
+# read as a host where everything passed.
+SKIP=0
+skip() { SKIP=$((SKIP + 1)); printf '  SKIP %s -- %s\n' "$1" "$2"; }
+
 printf 'static tests\n'
 
 # ── every script parses and is executable ───────────────────────────────────
@@ -289,6 +298,54 @@ else
   fi
 fi
 
-printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
+# ── ⛔ THE CONSOLE DRIVER, WHICH IS THE ONE THING HERE THAT IS BEHAVIOUR ────
+#
+# Everything above reads the tree. These two RUN the driver against a fake guest
+# and assert both of its primitives are bounded: INF-08, a read that returned the
+# right answer only after burning its whole budget, and INF-10, a write that
+# never returned at all against a guest that had stopped draining its console.
+#
+# ⛔ BOTH HALVES, BECAUSE THE PAIR IS THE POINT. The two had different answers.
+# The PowerShell half never had INF-08, because its default prompt is unanchored
+# and so its prompt count could rise; it had INF-10 in full. ⚠ A suite that ran
+# only the language the defect was filed against would have declared the pair
+# fixed on the evidence of one half.
+#
+# ⚠ NEITHER NEEDS AN EMULATOR. The guest is a few lines that print a prompt and
+# then either answer or stop reading.
+PY=""
+for c in python3 python; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'print(1)' >/dev/null 2>&1; then
+    PY=$c
+    break
+  fi
+done
+if [ -n "$PY" ]; then
+  if out=$("$PY" tests/console-bounds.py 2>&1); then
+    ok "the console driver's read and write are both bounded (python)"
+  else
+    bad "console-bounds.py refused. reproduce: $PY tests/console-bounds.py"
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+else
+  skip 'console-bounds (python)' 'no working python3 or python on PATH'
+fi
+
+PWSH=""
+for c in pwsh pwsh.exe powershell.exe; do
+  if command -v "$c" >/dev/null 2>&1; then PWSH=$c; break; fi
+done
+if [ -n "$PWSH" ]; then
+  if out=$("$PWSH" -NoProfile -File tests/console-bounds.ps1 2>&1); then
+    ok "the console driver's read and write are both bounded (powershell)"
+  else
+    bad "console-bounds.ps1 refused. reproduce: $PWSH -NoProfile -File tests/console-bounds.ps1"
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+else
+  skip 'console-bounds (powershell)' 'no pwsh, pwsh.exe or powershell.exe on PATH'
+fi
+
+printf '\n%s passed, %s failed, %s skipped\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ] || exit 1
 exit 0

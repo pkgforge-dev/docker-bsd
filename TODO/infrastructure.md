@@ -294,7 +294,7 @@ a script: no check can recognise "this sentence is a memoir".
 
 **Source** Reproduced 2026-08-27 while building the `IMG-01` image, which reads
 a command's output back out of a guest's serial console.
-**Category** infrastructure · **Priority** P1 · **Effort** S · **Status** open
+**Category** infrastructure · **Priority** P1 · **Effort** S · **Status** done
 
 ### Problem
 
@@ -346,6 +346,51 @@ sh experiments/35-boot-in-container.sh
 ⛔ Exit 0, and the whole run finishes in a time that is not a multiple of the
 per-command timeout.
 
+### Closed 2026-08-28
+
+**What changed.** `Console.wait_for_prompt` takes a **position in the stream**
+instead of a prompt count, and `run()` passes it the length of the buffer from
+before the command was typed. ⭐ The prompt the command was typed at begins
+before that position and cannot match; the one the guest prints afterwards
+does. ⛔ **No count, no baseline, and nothing that depends on how many times a
+pattern is allowed to match.**
+
+⚠ **A second, smaller defect in the same function was found by the test and
+fixed with it.** `run()` compared each line against the prompt pattern *after*
+`rstrip()`, which removes the prompt's trailing space, so a `# $` pattern
+stopped matching its own prompt and a bare `#` was returned as a line of output
+the guest never printed. ⛔ **`console.ps1` already allowed for it, with
+`# ?$`**, and this side did not: that is exactly the twin drift the pair exists
+to prevent.
+
+**The defect was planted first**, per the entry's own approach.
+[`../tests/console-bounds.py`](../tests/console-bounds.py) drives the real
+driver against a fake guest that answers like a tty, and against today's code it
+said:
+
+```text
+  FAIL run() did not see the command finish at all
+  FAIL run() returned ['#'], expected ['GUEST-ANSWERED']
+```
+
+After the fix, on the same test:
+
+```text
+  ok   run() returned in 0.2s of a 30s budget
+  ok   run() returned exactly what the guest printed: ['GUEST-ANSWERED']
+```
+
+⭐ **The twin was checked, and the entry asked for that either way.**
+`console.ps1` **did not have this defect**, and the reason is worth keeping: its
+default prompt, `root@[^\r\n]*# `, is not anchored, so its prompt count could
+rise. ⚠ **A caller passing an anchored pattern would have met it exactly**, so
+both halves track a position now and
+[`../tests/console-bounds.ps1`](../tests/console-bounds.ps1) asserts it on that
+side too.
+
+⛔ **Both tests run in `tests/run.sh`**, and a host that cannot run one reports
+it as a SKIP rather than counting it as a pass.
+
 ---
 
 ## INF-09. Provisioning the guest costs more than everything else in the build
@@ -353,23 +398,35 @@ per-command timeout.
 **Source** Measured 2026-08-28 while building the image `IMG-02` needs.
 **Category** infrastructure · **Priority** P2 · **Effort** M · **Status** open
 
-### ⭐ FOUND 2026-08-28. It is the filesystem, and it is neither `pkg_add` nor the guest
+### ⛔ WHERE IT STANDS, 2026-08-28. `pkg_add` does not finish. Plain `tar` does
 
-⛔ **Writing half a gigabyte into the guest's root filesystem does not finish,
-whatever writes it.** Two controls are the whole answer, run with the same
-bytes, in the same image, minutes apart, by
-[`../experiments/43-siginfo-the-stuck-guest.sh`](../experiments/43-siginfo-the-stuck-guest.sh):
+⭐ **Five destinations, the same 490 MB archive, the same guest, one freshly
+booted guest each. Every one of them finished.** The seconds are in
+[`../docs/LIMITS.md`](../docs/LIMITS.md) and in no other file.
 
-| the same 490 MB, the same 1,664 files, the same guest | result |
+| what the same `tar xpf /guest-package.tgz` was pointed at | |
 | --- | --- |
-| `tar xpf /guest-package.tgz -C /var/tmp`, onto the **ext2 root** | ⛔ **still running after 900 s** |
-| the same `tar`, into a **tmpfs** mounted inside that guest | ⭐ **finished**, and said so |
+| the guest's own ext2 root, at `/var/tmp` | ⭐ **finished** |
+| a fresh 2 GB ext2, `-O none`, **1 KB blocks**, on a second disk | ⭐ **finished** |
+| the same, **4 KB blocks**, one `mke2fs` argument apart | ⭐ **finished** |
+| the shipped root's own bytes, `dd` out of the image and mounted as data | ⭐ **finished** |
+| the same, with the archive copied onto it first so one filesystem carries both the read and the write | ⭐ **finished** |
 
-⭐ **So `pkg_add` is exonerated**: plain `tar` does not finish either.
-⭐ **And the guest is exonerated**: the same `tar`, the same bytes, the same
-emulated CPU, finishes when the destination is not that filesystem.
+⛔ **And `pkg_add -U` on that same archive, into that same root, does not.**
+It reproduces exactly, every time, with the signature below.
 
-### ⛔ What the kernel says, which is the question no earlier reading could ask
+⭐ **So the answer is the eighth explanation in the table further down, the one
+this entry had already killed and buried**: it is `pkg_add`'s own work, and not
+the filesystem, not the block size, not the emulator and not the guest.
+
+⛔ **The control that killed that explanation does not reproduce.** It said
+plain `tar` onto the ext2 root was still running after 900 s. Run again today
+through two different instruments, including the one that took the original
+reading, it finishes in about half a minute. ⚠ **Nobody can say from here what
+was different that day**, and the console log was not kept. The withdrawn
+wording, and what withdrew it, is in [`../HISTORY/inf-09.md`](../HISTORY/inf-09.md).
+
+### ⛔ What the kernel says, and this is the reading that has survived everything
 
 ⛔ **`ktrace` cannot be used on this guest at all.** The binary is in the
 userland and the syscall is not in the kernel:
@@ -379,37 +436,63 @@ ktrace: ktrace(2) system call not supported in the running kernel;
         re-compile kernel with `options KTRACE'
 ```
 
-⚠ This entry's approach section asked for a ktrace, and it was never available.
-⛔ **A tool being present is not an instrument being available**, and nothing
-outside the guest could have told the difference.
+⚠ This entry's approach section once asked for a ktrace, and it was never
+available. ⛔ **A tool being present is not an instrument being available**, and
+nothing outside the guest could have told the difference.
 
-⭐ **SIGINFO is answered by the KERNEL and needs no userland at all**, which is
-what makes it the right instrument here: this guest's userland stops being
-scheduled. Ctrl-T every 45 seconds, over 1,404 seconds of `pkg_add`:
+⭐ **SIGINFO is answered by the KERNEL and needs no userland at all.** Ctrl-T at
+`pkg_add`, on 2026-08-28, every 45 seconds:
 
 ```text
-t=48    load: 0.41  cmd: pkg_add 2899   15.78u    26.88s 74% 13348k
-t=290   load: 0.41  cmd: pkg_add 2899   15.78u   269.22s 74% 13348k
-t=871   load: 0.41  cmd: pkg_add 2899   15.78u   832.29s 74% 13348k
-t=1404  load: 0.41  cmd: pkg_add 2899   15.78u  1382.68s 74% 13348k
+t=48    load: 0.46  cmd: pkg_add 2899 [0x7f7ff728888a/0]  18.45u   23.86s 77% 13348k
+t=96    load: 0.46  cmd: pkg_add 2899 [0x7f7ff728888a/0]  18.45u   72.32s 77% 13348k
+t=144   load: 0.46  cmd: pkg_add 2899 [0x7f7ff728888a/0]  18.45u  120.76s 77% 13348k
 ```
 
-⛔ **Read the two numbers. User time is FROZEN at 15.78 seconds and system time
-climbs one for one with the wall clock.** Over 1,356 seconds the process
-executed **not one userland instruction**, and its resident size never moved off
-13,348 KB.
+⛔ **Read the two numbers. User time is FROZEN at 18.45 seconds and system time
+climbs one for one with the wall clock**, and the resident size never moves off
+13,348 KB. ⭐ **The same signature, to the kilobyte, as the first reading this
+entry ever took**, which ran to 1,404 seconds and is kept in
+[`../HISTORY/inf-09.md`](../HISTORY/inf-09.md).
 
-⭐ **That answers "spinning or waiting", and it is neither of the two things
-every guess assumed.** It is not blocked on IO, which would show almost no CPU.
-It is not working in userland, which would move `15.78u`. ⛔ **It is inside the
-kernel, burning a whole CPU, and not coming back.**
+⭐ **That answers "spinning or waiting".** It is not blocked on IO, which would
+show almost no CPU. It is not working in userland, which would move `18.45u`.
+⛔ **It is inside the kernel, burning a whole CPU, and not coming back.**
 
-### ⛔ The filesystem it is grinding on, read rather than assumed
+⚠ **And a healthy run looks completely different through the same instrument.**
+The `tar` that finishes reported `14.26u 14.04s` at t=33, both numbers moving,
+and printed its own SIGINFO progress line beside the kernel's.
+
+### ⭐ And `pkg_add -v` says WHERE it stops, which is the first positive reading this entry has
+
+⛔ **The unpack finishes. What comes after it does not.** `pkg_add -v -U` on the
+same package prints every path in it, in order, and reaches the last one:
+
+```text
+gcc14/share/gcc-14.3.0/python/libstdcxx/v6/xmethods.py
+```
+
+⛔ **And then nothing, for the remaining 380 seconds of the run**, while the
+kernel answers every Ctrl-T with the same frozen user time:
+
+```text
+t=63    17.19u   40.40s 76% 13356k
+t=252   17.19u  229.63s 76% 13356k
+t=441   17.19u  355.77s 76% 13356k
+```
+
+⭐ **That is the narrowest statement this entry has ever been able to make**, and
+it is a reading rather than a theory: **`pkg_add` unpacks the whole package and
+stops in the phase after the unpack.** ⚠ Which phase, and which loop in the
+kernel, is still not read.
+
+### ⛔ The filesystem, read rather than assumed
 
 `dumpe2fs` on the image this repository ships, from Linux, 2026-08-28:
 
 ```text
 Filesystem features:      (none)
+Filesystem state:         clean
 Block count:              2096108
 Block size:               1024
 Blocks per group:         8192
@@ -417,28 +500,21 @@ Inode count:              522240
 ```
 
 ⛔ **1 KB blocks over a 2 GB filesystem, with no features at all.** No
-`dir_index`, no `extent`, no `sparse_super`. 256 block groups. Writing 490 MB
-means allocating roughly **half a million individual 1 KB blocks**, and every
-directory lookup is a linear scan.
+`dir_index`, no `extent`, no `sparse_super`. 256 block groups.
 
-⭐ **This repository made that filesystem.**
-[`../images/netbsd/grow-rootfs.sh`](../images/netbsd/grow-rootfs.sh) grows the
-published image with `resize2fs`, and ⛔ **`resize2fs` cannot change a block
-size.** 1 KB blocks are a reasonable choice for the small image upstream
-publishes. Grown to 2 GB and filled with a compiler, they are not.
+⚠ **That is a description of the filesystem and it is NOT the fault.** It was
+published as the fault and
+[`../experiments/44-block-size-control.sh`](../experiments/44-block-size-control.sh)
+withdrew it: a fresh filesystem with that geometry takes the archive in the
+same time a 4 KB one does. ⭐ **`mke2fs -b 4096` would have worked, would have
+been shipped, and would have been the ninth explanation published without being
+understood.**
 
-⚠ **Written as the narrowing it is, not as a proven mechanism.** What is
-measured: the destination filesystem decides whether the write finishes, all of
-the time is kernel time, and this filesystem has that geometry. ⛔ **Which loop
-inside NetBSD's `ext2fs` is spinning has NOT been read**, and this repository
-has twice published a tidy mechanism invented to fit a number. The next step is
-the control in the approach, not a theory.
+### ⭐ Upstream's own source, which says how the filesystem got that shape
 
-### ⭐ CORRECTED 2026-08-28 BY READING UPSTREAM. The ext2 is a build-host fallback
-
-⛔ **The section above says "this repository made that filesystem" and that is
-only half true.** The fourth reference sweep re-mined smolBSD at `0824f4ee04fc`
-and found the choice made in upstream's own `mkimg.sh`, lines 155 to 167:
+⛔ **Still true, and it no longer explains anything about this fault.** The
+fourth reference sweep re-mined smolBSD at `0824f4ee04fc` and found the choice
+made in `mkimg.sh`, lines 155 to 167:
 
 ```text
 if [ -n "$is_linux" ]; then
@@ -453,35 +529,43 @@ else # NetBSD
 	mountfs="ffs"
 ```
 
-⭐ **Three facts, and they change the fix:**
-
-1. ⛔ **ext2 is what smolBSD falls back to when the BUILD HOST is Linux**,
-   because a Linux host cannot `newfs` an FFS. It is not a decision about the
-   guest. On a NetBSD or FreeBSD build host the same script produces **FFS**.
-2. ⛔ **The comment says only the BUILDER image is ext2.** This repository
-   ships `build-amd64.img`, which is that builder image, as its runtime root.
-3. ⛔ **`mke2fs -O none` is literally "no features"**, which is exactly what
-   `dumpe2fs` reported here. ⭐ **The filesystem this entry is stuck on is
-   generated at that line**, and the 1 KB block size follows from `mke2fs`
-   defaults on a small image.
-
-⚠ **Upstream has met ext2 trouble of its own**: `mkimg.sh:319` carries the
-comment `unionfs with ext2 leads to i/o error`.
+⭐ **Two facts worth keeping:** ext2 is what smolBSD falls back to when the
+BUILD HOST is Linux, and upstream treats `build-amd64.img` as a build
+environment rather than a product. ⚠ **The ext2 is also what makes this
+repository's build work at all**: an FFS root could not be grown, written into
+or inspected from Linux, and every step in
+[`../images/netbsd/grow-rootfs.sh`](../images/netbsd/grow-rootfs.sh) depends on
+being able to do exactly that.
 
 ⭐ **And upstream provisions with a chroot, not a booted guest.**
 `smoler/build.sh:245` turns a `RUN` line into
 `chroot . su ${USER} -c "cd ${WORKDIR} && ..."`, inside a script that refuses to
-run outside the builder image. ⛔ **This repository types at a serial console
-instead**, which is the mechanism this entry is about.
+run outside the builder image. ⛔ **That chroot runs BSD binaries and so it
+needs a BSD host**, which [`RULES.md`](RULES.md) says does not exist here.
+⚠ It is not a route this project can take; it is evidence that upstream does not
+type at a serial console either.
 
-⛔ **So the question is no longer "what block size".** It is "why is the builder
-image the runtime root at all".
-[`../HISTORY/references/usable.md`](../HISTORY/references/usable.md), the `R34`
-section, has the lines.
+### ⭐ ANSWERED: should `build-amd64.img` be the runtime root at all? Yes, for now
 
----
+⛔ **[`PROGRESS.md`](PROGRESS.md) asked this first because it was the fix that
+cost no filesystem work.** The answer is that there is nothing to fix on that
+axis:
 
-### ⛔ EIGHT EXPLANATIONS, ALL DEAD, KEPT BECAUSE EACH COST A DIFFERENT FIX
+1. ⭐ **The filesystem is exonerated by four controls.** The reason to stop
+   shipping the builder image was that its filesystem could not take a large
+   write. It can.
+2. ⛔ **Upstream publishes two images and the other one is a rescue userland**
+   of about 20 MB, with no package manager and no toolchain. Swapping to it
+   loses everything `IMG-02` exists for.
+3. ⚠ **Building a third from NetBSD's own sets is a real option and it is not
+   this entry's.** [`../scripts/sources`](../scripts/sources) pins NetBSD 10.1
+   sets while the guest kernel is smolBSD 11.0_STABLE, so it carries a version
+   skew nobody has measured, and it is `IMG-02` sized work.
+
+⚠ **Recorded as answered rather than closed**, because the question was worth
+asking and the reason it is a "no" changed completely once the controls ran.
+
+### ⛔ NINE EXPLANATIONS, AND THE NINTH IS THAT ONE OF THEM WAS WRONGLY BURIED
 
 ⚠ **This entry was first written with a confident explanation and it was
 wrong.** Each guess was cheap to test and each would have sent the fix somewhere
@@ -496,72 +580,80 @@ different.
 | `/tmp` is a 32 MB tmpfs and `pkg_add` stages there | ⛔ **no.** `TMPDIR=/var/tmp pkg_add -U` behaved exactly the same. ⚠ The full `/tmp` is real and is a real trap for a consumer, and it is not this |
 | it is `-U` | ⛔ **no.** Dropping it gave no output and no exit inside twelve minutes |
 | ⚠ **it is memory pressure**, because the guest has 1 GB and no swap | ⛔ **no.** Rerun with three times the memory, so **2,881 MB free** by the guest's own `top`: no output in 2,700 seconds. ⭐ The emulator's resident size stopped at about 1 GB either way, so the working set is a gigabyte and having three makes no difference |
-| ⚠ **it is `pkg_add`'s bookkeeping after the files are written** | ⛔ **no.** Plain `tar`, which does no bookkeeping at all, does not finish either |
+| ⛔ **it is the destination filesystem** | ⛔ **no, and this one was the headline of four documents.** Five destinations, including a fresh 1 KB filesystem and the shipped root's own bytes as a data disk, all take the archive in about half a minute |
+| ⛔ **it is the 1 KB block size** | ⛔ **no.** One `mke2fs` argument apart, same size, same features, same inode density, one guest each: both finish |
+| ⭐ **it is `pkg_add`'s own work**, during or after the write | ⚠ **ALIVE AGAIN.** It was killed by a `tar` control that does not reproduce, and it is the only explanation left standing |
 
-⭐ **What found it was a control, not a theory**: run the same write against a
-different filesystem in the same guest, and see which one finishes.
+⭐ **What found the first eight was a control.** ⛔ **What found the ninth was
+running the same control twice**, which is a rule this repository already had
+for benchmarks and had not applied to a diagnosis.
 
 ### ⚠ Two things measured on the way that belong to other entries
 
-- ⛔ **The guest's whole userland stops being scheduled**, not just the writer.
-  A shell builtin `echo` produced nothing for 300 seconds, twice, and thirty
-  forked `sleep 30` calls took more than 1,500 seconds of wall clock. ⚠ That is
-  why no instrument that is a program can be used here: not `ps`, not `top`,
-  not `vmstat`, not a driver script and not a `kill`. It is also why
+- ⛔ **The guest's whole userland stops being scheduled** while `pkg_add` runs,
+  not just the writer. A shell builtin `echo` produced nothing for 300 seconds,
+  twice, and thirty forked `sleep 30` calls took more than 1,500 seconds of wall
+  clock. ⚠ That is why no instrument that is a program can be used here, and why
   [`../experiments/42-probe-pkg-add-inside-guest.sh`](../experiments/42-probe-pkg-add-inside-guest.sh)
   could not get its own record out of the guest twice in a row.
-- ⛔ **`Console.send()` blocks forever against such a guest**, which is `INF-10`.
-  The tty's input queue is 1,024 bytes, the guest stops draining it, and the
-  write never returns.
+- ⛔ **`Console.send()` blocked forever against such a guest**, which was
+  `INF-10` and is fixed.
 
 ### Approach
 
-⭐ **The fix follows from the control rather than from a theory.** In order of
-what is cheapest to prove:
+⭐ **The destination is exonerated and the phase is located, so what is left is
+one question and one workaround.** In order of what is cheapest to prove:
 
-0. ⛔ **Ask first whether the builder image should be the runtime root at all.**
-   Upstream ships `rescue-amd64.img` and `build-amd64.img` and treats the second
-   as a **build environment**, not a product. ⭐ **The cheapest possible fix is
-   to stop shipping it as one**, and it costs no filesystem work.
-1. ⭐ **Make the filesystem instead of growing it.** The guest root is ext2 and
-   Linux owns it completely: `debugfs -R rdump` the published tree out,
-   `mke2fs -b 4096 -d` a new one at the size wanted, and write the package in
-   from Linux. ⛔ **No guest, no emulator, and no provisioning step at all**,
-   which is what [`PROGRESS.md`](PROGRESS.md) already said this entry should
-   reach.
-2. ⚠ **Prove the block size is the lever before rebuilding anything**, by
-   repeating the two controls against a 4 KB filesystem. ⛔ A fix that works and
-   is not understood is the ninth guess.
-3. ⭐ **Or produce FFS rather than ext2**, which is what upstream does on a BSD
-   build host. ⚠ **That needs a BSD to run `newfs`**, and [`RULES.md`](RULES.md)
-   says none exists here, so it would have to happen inside this project's own
-   guest. ⛔ Recorded as the option it is, not recommended.
-4. ⚠ **Read what upstream already provides before writing any of them.**
-   [`../HISTORY/references/usable.md`](../HISTORY/references/usable.md), the
-   `R34` section. ⛔ **This repository hand-rolled a serial-console provisioner
-   without looking at `smoler/build.sh`**, whose tracker holds 83 items and 51
-   threads of which two have been read.
+1. ⭐ **DONE. Read what `pkg_add` says before it stops.** `pkg_add -v` prints
+   every path and reaches the last one, so the unpack completes and the phase
+   after it does not. ⛔ That is a reading and not a theory, and this entry spent
+   nine explanations for want of one.
+2. ⭐ **Do not need it at all, and this is the route `IMG-02` takes.** A pkgsrc
+   binary package is an archive with a known layout: `@cwd /usr/pkg` in its own
+   `+CONTENTS`, every payload path relative to that one prefix, and nine
+   metadata files that belong in `/var/db/pkg/<pkgname>/` and are marked
+   `@ignore` so they are not payload. ⛔ **`tar` does all of it in about half a
+   minute**, which is measured, and
+   [`../experiments/46-install-without-pkg-add.sh`](../experiments/46-install-without-pkg-add.sh)
+   is the whole recipe with the checks after it.
+3. ⚠ **Then say what was given up.** No dependency resolution, and the package's
+   own `+INSTALL` has to be run rather than assumed away. ⛔ For `gcc14` every
+   branch in that script is guarded by `test -x ./+HELPER` and the package ships
+   no helper, so it is a no-op, **for this package**. The experiment runs it
+   anyway, because assuming it for the next one is how this stops working
+   quietly.
+4. ⛔ **Do not rebuild the filesystem.** Four controls say it is not the problem,
+   and a fix that works and is not understood is what this entry exists to stop.
+5. ⚠ **What would actually close this** is reading which loop in the kernel
+   `pkg_add` is in after the unpack. ⛔ `ktrace(2)` is not in this kernel, so
+   that needs either a kernel with `options KTRACE` or reading
+   `pkg_install`'s source for what it does between the last extracted file and
+   the pkgdb write. **Neither has been done.**
 
 ⛔ **And do not leave the trap in place for a consumer.** Somebody who boots the
-build variant and unpacks anything large meets exactly this, with the same
-silence, and `pkg_add` is not required to reproduce it.
+build variant and runs `pkg_add` on anything large meets this, with the same
+silence, whatever the image ships pre-installed.
 
 ### Prove
 
 ```bash
-sh experiments/43-siginfo-the-stuck-guest.sh localhost/netbsd:build
+sh experiments/46-install-without-pkg-add.sh localhost/netbsd:build
 ```
 
-⛔ The command that does not finish today must finish, with `gcc --version`
-answering afterwards and `pkg_info` listing what is installed, inside a runner's
-job budget.
+⛔ Exit 0, with `gcc --version` answering, `pkg_info -e` finding the package, and
+a recorded compile of `sqlite3.c` inside the guest, all inside a runner's job
+budget. ⚠ **The entry does not close on that**: it closes when the phase after
+the unpack is understood, or when `pkg_add` is deliberately and visibly declared
+unusable in this image with the reason recorded for a consumer.
+
+---
 
 ## INF-10. `Console.send()` blocks forever on a guest that stopped reading
 
 **Source** Measured 2026-08-28 by
 [`../experiments/42-probe-pkg-add-inside-guest.sh`](../experiments/42-probe-pkg-add-inside-guest.sh),
 whose first version wedged on it.
-**Category** infrastructure · **Priority** P1 · **Effort** S · **Status** open
+**Category** infrastructure · **Priority** P1 · **Effort** S · **Status** done
 
 ### Problem
 
@@ -621,3 +713,51 @@ sh experiments/42-probe-pkg-add-inside-guest.sh localhost/netbsd:build
 
 ⛔ Runs to its own end, and a test that fills the guest's input pipe returns a
 failure rather than hanging.
+
+### Closed 2026-08-28
+
+**What changed.** Both halves of the console driver got what every other
+primitive in them already had: a budget and a return value.
+
+| | |
+| --- | --- |
+| `console.py` | the child's **stdin fd is non-blocking**, next to the line that already did it for stdout. A full queue is then a `BlockingIOError` rather than a process parked in the kernel, and a deadline can be spent against it. `send(line, per_char, seconds)` returns whether the whole line was typed |
+| `console.ps1` | `Send-Line -TimeoutMs`, typing through a new `Send-Char` that bounds **both** the `WriteAsync` and the `FlushAsync`. ⚠ A StreamWriter buffers, so the write can return long before a byte reaches the guest and the flush is where a full pipe actually stops |
+
+⛔ **A `False` is a real state and the callers were changed to read it.**
+`guest.py`'s `run_line` returns "the console stopped accepting input part way
+through the command, so it was never run" instead of waiting out its whole
+budget for a status from a command the guest never saw.
+
+⭐ **And a `send_raw` was added for the characters that are not a line**, because
+a non-blocking fd turns a bare `proc.stdin.write` into a call that can return
+`None` and lose a keystroke in silence. `43-siginfo-the-stuck-guest.sh` presses
+Ctrl-T through it.
+
+**The defect was planted first**, per the entry's own approach. The test fills
+the pipe against a guest that printed a prompt and then stopped reading, which
+is the state `INF-09`'s guest reaches. Against today's code, both halves:
+
+```text
+  FAIL send(self, line, per_char=0.005) takes no budget. INF-10 ...
+  FAIL Send-Line takes no budget. INF-10 ...
+```
+
+After the fix:
+
+```text
+  ok   send() gave up after 3.0s and said so
+  ok   Send-Line gave up after 3.0s and said so
+```
+
+⛔ **The test cannot hang against the code it refuses**, which matters here more
+than usual: this entry is on record as an instrument whose failure mode was the
+same shape as the fault. The budget parameter is checked before anything is
+written, and the write itself runs in a daemon thread joined with a deadline.
+
+⚠ **What is NOT fixed, and it is a property rather than a defect.** A timed-out
+write leaves a partially typed line in the guest's input queue on both sides,
+and on the PowerShell side a pending task on the stream, so the next write
+throws. ⛔ **That is why it returns a value**: a caller that gets `False` stops
+the guest. It does not type again.
+

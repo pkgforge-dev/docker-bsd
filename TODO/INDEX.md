@@ -14,16 +14,16 @@ between the two. It runs as a gate.
 ## Counts
 
 ```text
-total 22  open 20  blocked 0  done 2
+total 22  open 18  blocked 0  done 4
 ```
 
 | priority | open | blocked | done | total |
 | --- | --- | --- | --- | --- |
 | P0 | 1 | 0 | 1 | 2 |
-| P1 | 12 | 0 | 0 | 12 |
+| P1 | 10 | 0 | 2 | 12 |
 | P2 | 7 | 0 | 0 | 7 |
 | P3 | 0 | 0 | 1 | 1 |
-| **all** | **20** | **0** | **2** | **22** |
+| **all** | **18** | **0** | **4** | **22** |
 
 ---
 
@@ -43,9 +43,9 @@ total 22  open 20  blocked 0  done 2
 | INF-05 | P1 | L | open | CI that tests the permutations, and publishes only when all pass | [`infrastructure.md`](infrastructure.md) |
 | INF-06 | P1 | M | open | Survive an upstream changing its mind | [`infrastructure.md`](infrastructure.md) |
 | INF-07 | P1 | M | open | The consumer-facing documents read like a manual | [`infrastructure.md`](infrastructure.md) |
-| INF-08 | P1 | S | open | The shared console driver returns the right answer late | [`infrastructure.md`](infrastructure.md) |
+| INF-08 | P1 | S | done | The shared console driver returns the right answer late | [`infrastructure.md`](infrastructure.md) |
 | INF-09 | P2 | M | open | Provisioning the guest costs more than everything else in the build | [`infrastructure.md`](infrastructure.md) |
-| INF-10 | P1 | S | open | `Console.send()` blocks forever on a guest that stopped reading | [`infrastructure.md`](infrastructure.md) |
+| INF-10 | P1 | S | done | `Console.send()` blocks forever on a guest that stopped reading | [`infrastructure.md`](infrastructure.md) |
 | OPT-01 | P2 | M | open | The allocator, because the default one is slow | [`performance.md`](performance.md) |
 | OPT-02 | P2 | L | open | An emulator image built to do one thing | [`performance.md`](performance.md) |
 | OPT-03 | P2 | L | open | Is a virtual machine even the right shape | [`performance.md`](performance.md) |

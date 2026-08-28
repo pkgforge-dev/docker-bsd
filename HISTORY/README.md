@@ -20,6 +20,7 @@ and it is the only file that carries one.
 | --- | --- |
 | [`poc.md`](poc.md) | ⭐ the proof of concept. Every measurement behind the image-building half, with the commands that produced it |
 | [`dragonfly.md`](dragonfly.md) | ⛔ **why DragonFly was dropped on 2026-08-28, and the working route that went with it**, kept verbatim so reversing the decision is a restore rather than a rewrite |
+| [`inf-09.md`](inf-09.md) | ⛔ **`INF-09`'s withdrawn wording, kept verbatim.** The entry has published a confident explanation nine times; this is where each one lives with the measurement that took it away, including the control that named a culprit and then would not reproduce |
 | [`bsd-entries.md`](bsd-entries.md) | ⛔ **how `BSD-01` and `BSD-02` reached their current answers**, in the original wording: the ranking table, the ruling that reopened it, the contradiction, and six sections headed `Correction:`. Moved out of `../TODO/bsd.md` on 2026-08-28 so that file could carry current facts |
 | [`misc/`](misc/) | session records and the orientation prompt |
 | [`references/`](references/) | ⭐ 37 external projects mined across four sweeps, with verdicts, a ranking, and the commands worth stealing |
@@ -49,6 +50,8 @@ about; a review named after a person finds what that person would trip over.
 | [`reviews/12-somebody-who-has-to-build-the-cross-toolchain-on-monday.md`](reviews/12-somebody-who-has-to-build-the-cross-toolchain-on-monday.md) | ⭐ a reader acting on the fourth sweep, asking whether they can start without re-cloning anything |
 | [`reviews/13-somebody-checking-that-dropping-a-bsd-broke-nothing.md`](reviews/13-somebody-checking-that-dropping-a-bsd-broke-nothing.md) | ⛔ the door sweep applied to a REMOVAL, where nothing fails loudly |
 | [`reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md`](reviews/14-the-skeptic-again-now-that-clang-cross-compiles-for-all-three.md) | ⛔ review 7 re-run against evidence it did not have. The alternative got cheaper |
+| [`reviews/15-somebody-who-started-building-on-last-sessions-answer.md`](reviews/15-somebody-who-started-building-on-last-sessions-answer.md) | ⛔ a reader who believed yesterday's answer and spent the day on it. What a single unrepeated control costs |
+| [`reviews/16-somebody-who-pulled-the-build-variant-to-compile-something.md`](reviews/16-somebody-who-pulled-the-build-variant-to-compile-something.md) | ⭐ a developer reading the image rather than the repository, walking into three walls of which one was documented |
 
 ⛔ **Every review ends with what it did not look at.** A pass that reports
 nothing means the pass was too shallow, and three passes reporting nothing is a
@@ -73,10 +76,10 @@ in no README anywhere.
 
 ---
 
-## ⛔ Four corrections this repository has published about itself
+## ⛔ Five corrections this repository has published about itself
 
 ⚠ Listed here because a reader who trusts a document without checking this page
-will trust four sentences that are wrong.
+will trust five sentences that are wrong.
 
 1. **"There is no counterpart presenting BSD syscalls on a Linux kernel."**
    One was built and abandoned in 2022. ⭐ The conclusion holds and the
@@ -92,7 +95,15 @@ will trust four sentences that are wrong.
    values of X, published and withdrawn one at a time. It is none of them: the
    destination filesystem decides whether the write finishes at all.
    `INF-09` in [`../TODO/infrastructure.md`](../TODO/infrastructure.md).
+5. ⛔ **Correction 4 is itself withdrawn.** "The destination filesystem decides"
+   was the headline of four documents for one session, and the single `tar`
+   control it rested on does not reproduce: the same command onto the same ext2
+   root finishes in about half a minute, through two different instruments.
+   ⭐ The eighth value of X, `pkg_add`'s own work, is the one left standing.
+   [`inf-09.md`](inf-09.md).
 
-⭐ **All four were caught by a review or a later measurement, not by anything
-running.** That is the argument for [`../docs/methodology/reviews.md`](../docs/methodology/reviews.md)
-in one sentence.
+⛔ **Five corrections, and the fifth is a correction to a correction.** ⚠ Notice
+what that costs to catch: numbers 1 to 4 were caught by a review or a later
+measurement, and number 5 needed **the same control run a second time**. ⭐ That
+is the argument for [`../docs/methodology/reviews.md`](../docs/methodology/reviews.md)
+and for repeating a diagnosis, in one sentence each.

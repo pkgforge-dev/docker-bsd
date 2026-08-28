@@ -18,6 +18,26 @@ The two rules that look like fussiness and are not, both measured 2026-08-27:
    misses its own echo, the echo survives into the output, and a success marker
    can match the command line that merely mentioned it. That reported "a
    container ran" over a run that had exited with an error.
+
+⛔ AND EVERY PRIMITIVE HERE IS BOUNDED, INCLUDING THE ONE THAT WRITES. That was
+not true until 2026-08-28, and the two defects it caused were filed separately
+before anybody saw they were the same missing idea:
+
+  INF-08  ``run`` waited for one more PROMPT than there was before, counted with
+          a ``$``-anchored pattern that Python matches at the end of the string
+          only. The count was 0 or 1 and never rose, so every call returned the
+          right answer after burning its whole budget. ⭐ It waits for a prompt
+          at or after a POSITION in the stream now, which is what "the command
+          finished" means and cannot be miscounted.
+  INF-10  ``send`` wrote with no budget at all. Against a guest that has stopped
+          draining its console the tty's 1,024-byte queue fills, the write
+          blocks in the kernel, and no caller's timeout applies because the
+          caller never gets back to check one. ⭐ It takes a budget and returns
+          whether the whole line was typed.
+
+⚠ ``send`` RETURNING FALSE IS A REAL STATE AND NOT A WARNING. Part of a line is
+sitting in the guest's input queue, so the next thing typed continues it. A
+caller that gets False stops the guest; it does not type again.
 """
 
 import os
@@ -42,6 +62,12 @@ class Console:
             bufsize=0,
         )
         os.set_blocking(self.proc.stdout.fileno(), False)
+        # ⛔ THE WRITE END TOO, AND THAT IS WHAT MAKES `send` ABLE TO GIVE UP.
+        # A blocking write into a full pipe parks in the kernel and no timeout
+        # in this process can reach it; a non-blocking one raises
+        # BlockingIOError, which is a thing a budget can be spent against.
+        # INF-10.
+        os.set_blocking(self.proc.stdin.fileno(), False)
         self.text = ""
 
     # ------------------------------------------------------------------ read
@@ -74,43 +100,93 @@ class Console:
             self.pump()
         return False
 
-    def prompts(self):
-        return len(self.prompt.findall(self.text))
-
-    def wait_for_prompt(self, baseline, seconds):
-        """Wait until one MORE prompt than *baseline*.
+    def wait_for_prompt(self, position, seconds):
+        """Wait for a prompt that begins at or after *position* in the stream.
 
         ⭐ That is what "the command finished" means on a console. Waiting for
-        the prompt pattern itself matches the prompt the command was typed at
+        the prompt pattern anywhere matches the prompt the command was typed at
         and returns immediately.
+
+        ⛔ A POSITION, NOT A COUNT, AND THAT IS INF-08. This waited for one more
+        prompt than there had been, counted with the caller's pattern. Every
+        caller anchors that pattern with `$` so it matches a guest sitting idle
+        rather than a `# ` in the middle of some output, and Python matches `$`
+        at the end of the STRING. So the count was 0 or 1 whatever the guest
+        did, "one more than before" was never true, and every call returned the
+        right answer after burning its whole budget.
+
+        ⚠ The prompt the command was typed at starts BEFORE *position* and so
+        cannot match, which is the whole trick: no count, no baseline, and
+        nothing that depends on how many times a pattern can match.
         """
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
-            if self.prompts() > baseline:
+            if self.prompt.search(self.text, position):
                 return True
             if self.proc.poll() is not None:
                 self.pump(0.3)
-                return self.prompts() > baseline
+                return bool(self.prompt.search(self.text, position))
             self.pump()
         return False
 
     # ----------------------------------------------------------------- write
-    def send(self, line, per_char=0.005):
-        """Type *line* one character at a time, then a newline. See rule 1."""
+    def _type(self, byte, deadline):
+        """Put one byte in the guest's input queue, or give up. See INF-10.
+
+        ⛔ The queue is the guest's, it is 1,024 bytes, and a guest that has
+        stopped being scheduled stops draining it. The fd is non-blocking, so a
+        full queue is a BlockingIOError rather than a process parked in the
+        kernel, and a budget can be spent against it.
+        """
+        while True:
+            try:
+                if self.proc.stdin.write(byte):
+                    return True
+            except BlockingIOError:
+                pass
+            except (BrokenPipeError, OSError):
+                return False
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.02)
+
+    def send(self, line, per_char=0.005, seconds=30):
+        """Type *line* one character at a time, then a newline. See rule 1.
+
+        ⛔ RETURNS WHETHER THE WHOLE LINE WAS TYPED, and a False is a real state
+        rather than a warning: part of the line is in the guest's input queue,
+        so the next thing typed continues it. A caller that gets False stops the
+        guest. INF-10.
+        """
+        deadline = time.monotonic() + seconds
         for ch in line:
-            self.proc.stdin.write(ch.encode())
-            self.proc.stdin.flush()
+            if not self._type(ch.encode(), deadline):
+                return False
             if per_char:
                 time.sleep(per_char)
-        self.proc.stdin.write(b"\n")
-        self.proc.stdin.flush()
+        return self._type(b"\n", deadline)
+
+    def send_raw(self, data, seconds=5):
+        """Put raw bytes in the guest's input queue, with no newline after.
+
+        ⭐ FOR THE CHARACTERS THAT ARE NOT A LINE. `\\x14` is the tty's VSTATUS
+        character and 43-siginfo-the-stuck-guest.sh presses it at a guest whose
+        userland has stopped, because the KERNEL answers it. ⛔ It exists so
+        that nothing has to reach into `proc.stdin` directly: this file's fds
+        are non-blocking, so a bare `write` returns None instead of blocking and
+        a press would be lost in silence.
+        """
+        deadline = time.monotonic() + seconds
+        for byte in data:
+            if not self._type(bytes([byte]), deadline):
+                return False
+        return True
 
     def run(self, command, seconds=120):
         """Run one command in the guest and return the lines it printed."""
-        baseline = self.prompts()
         before = len(self.text)
-        self.send(command)
-        ok = self.wait_for_prompt(baseline, seconds)
+        sent = self.send(command)
+        ok = sent and self.wait_for_prompt(before, seconds)
         chunk = self.text[before:]
         # See rule 2. Whitespace is stripped from BOTH sides of the comparison
         # so a tty-wrapped echo still matches itself and is removed.
@@ -122,7 +198,14 @@ class Console:
                 continue
             if re.sub(r"\s", "", line).find(want) >= 0:
                 continue
-            if self.prompt.search(line) and not self.prompt.sub("", line).strip():
+            # ⚠ THE PROMPT IS MATCHED AGAINST THE RAW LINE, NOT THE STRIPPED
+            # ONE. A prompt is `# ` with a trailing space and `raw.rstrip()`
+            # removes it, so a `# $` pattern stopped matching its own prompt and
+            # a bare `#` was returned as a line of output the guest never
+            # printed. ⛔ console.ps1 already allowed for it, with `# ?$`, and
+            # this side did not: that is exactly the twin drift the pair exists
+            # to prevent.
+            if self.prompt.search(raw) and not self.prompt.sub("", raw).strip():
                 continue
             lines.append(self.prompt.sub("", line).rstrip())
         return ok, [x for x in lines if x.strip()]

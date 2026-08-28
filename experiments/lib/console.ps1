@@ -153,31 +153,42 @@ function Wait-ForPattern {
   return $false
 }
 
-function Get-PromptCount {
-  [CmdletBinding(PositionalBinding = $false)]
-  param([Parameter(Mandatory)][hashtable]$Ctx)
-  ([regex]::Matches($Ctx.Text.ToString(), $Ctx.Prompt)).Count
-}
-
 function Wait-ForPrompt {
   <#
-  .SYNOPSIS  Wait until one MORE prompt has appeared than the baseline.
+  .SYNOPSIS  Wait for a prompt that begins at or after a position in the stream.
   .DESCRIPTION
     ⭐ That is what "the command finished" actually means on a console. Waiting
-    for the prompt pattern itself would match the prompt the command was typed
+    for the prompt pattern anywhere would match the prompt the command was typed
     at and return immediately.
+
+    ⛔ A POSITION, NOT A COUNT, AND THE TWIN IS WHY. console.py counted
+    prompts and its callers anchor the pattern with `$`, which matches at the
+    end of the string only, so the count was 0 or 1 whatever the guest did and
+    every call burned its whole budget. That is INF-08. This half's DEFAULT
+    prompt is unanchored, so the count did rise here and the defect never
+    showed; ⚠ a caller passing an anchored pattern would have met it exactly.
+    ⛔ Both halves track a position now, so neither can be miscounted.
+
+    ⚠ The prompt the command was typed at begins BEFORE the position and so
+    cannot match, which is the whole trick.
   #>
   [CmdletBinding(PositionalBinding = $false)]
   param(
     [Parameter(Mandatory)][hashtable]$Ctx,
-    [Parameter(Mandatory)][int]$Baseline,
+    [Parameter(Mandatory)][int]$Position,
     [Parameter(Mandatory)][int]$Seconds
   )
+  $rx = [regex]::new($Ctx.Prompt)
   $deadline = (Get-Date).AddSeconds($Seconds)
   while ((Get-Date) -lt $deadline) {
-    if ($Ctx.Process.HasExited) { [void](Step-GuestPump -Ctx $Ctx); return $false }
+    if ($Ctx.Process.HasExited) {
+      [void](Step-GuestPump -Ctx $Ctx)
+      $t = $Ctx.Text.ToString()
+      return ($Position -le $t.Length -and $rx.Match($t, $Position).Success)
+    }
     [void](Step-GuestPump -Ctx $Ctx)
-    if ((Get-PromptCount -Ctx $Ctx) -gt $Baseline) { return $true }
+    $t = $Ctx.Text.ToString()
+    if ($Position -le $t.Length -and $rx.Match($t, $Position).Success) { return $true }
   }
   return $false
 }
@@ -197,15 +208,53 @@ function Send-Line {
   param(
     [Parameter(Mandatory)][hashtable]$Ctx,
     [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
-    [int]$PerCharMs = 5
+    [int]$PerCharMs = 5,
+    [int]$TimeoutMs = 30000
   )
-  foreach ($ch in $Text.ToCharArray()) {
-    $Ctx.Process.StandardInput.Write($ch)
-    $Ctx.Process.StandardInput.Flush()
-    if ($PerCharMs -gt 0) { Start-Sleep -Milliseconds $PerCharMs }
+  $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
+  foreach ($ch in (($Text.ToCharArray()) + "`n")) {
+    $left = [int]([math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds))
+    if (-not (Send-Char -Ctx $Ctx -Char $ch -TimeoutMs $left)) { return $false }
+    if ($PerCharMs -gt 0 -and $ch -ne "`n") { Start-Sleep -Milliseconds $PerCharMs }
   }
-  $Ctx.Process.StandardInput.Write("`n")
-  $Ctx.Process.StandardInput.Flush()
+  return $true
+}
+
+function Send-Char {
+  <#
+  .SYNOPSIS  Put one character in the guest's input queue, or give up saying so.
+  .DESCRIPTION
+    ⛔ THE WRITE IS THE ONE PRIMITIVE THAT HAD NO BUDGET, AND THAT IS INF-10.
+    Every other function here takes a Seconds and returns $false; this one wrote
+    and flushed with nothing bounding either. Against a guest that has stopped
+    draining its console the tty's 1,024-byte queue fills, the pipe behind it
+    fills, and the flush parks in the kernel where no caller's timeout reaches
+    it. Measured 2026-08-28: ten minutes with one `ps` outstanding and no output
+    of any kind, which is the same shape as the fault being investigated.
+
+    ⚠ A TIMED-OUT WRITE LEAVES A TASK PENDING ON THE STREAM, so the next write
+    on the same context throws rather than blocking. ⛔ That is deliberate and it
+    is why this returns a value: a caller that gets $false stops the guest. It
+    does not type again.
+  #>
+  [CmdletBinding(PositionalBinding = $false)]
+  param(
+    [Parameter(Mandatory)][hashtable]$Ctx,
+    [Parameter(Mandatory)][char]$Char,
+    [int]$TimeoutMs = 5000
+  )
+  try {
+    $w = $Ctx.Process.StandardInput.WriteAsync($Char)
+    if (-not $w.Wait($TimeoutMs)) { return $false }
+    # ⚠ BOTH HALVES ARE BOUNDED. A StreamWriter buffers, so the Write can
+    # return long before a byte reaches the guest and the Flush is where a full
+    # pipe actually stops.
+    $f = $Ctx.Process.StandardInput.FlushAsync()
+    if (-not $f.Wait($TimeoutMs)) { return $false }
+    return $true
+  } catch {
+    return $false
+  }
 }
 
 function Enter-GuestLogin {
@@ -225,10 +274,10 @@ function Enter-GuestLogin {
   # ⛔ Let the tty settle. login(1) reopens and reconfigures the line, and
   # anything sent during that is lost.
   Start-Sleep -Milliseconds 750
-  Send-Line -Ctx $Ctx -Text $User
+  [void](Send-Line -Ctx $Ctx -Text $User)
   # This image's root has an empty password; some builds still prompt.
   if (Wait-ForPattern -Ctx $Ctx -Pattern 'Password:' -Seconds 5) {
-    Send-Line -Ctx $Ctx -Text ''
+    [void](Send-Line -Ctx $Ctx -Text '')
   }
   if (-not (Wait-ForPattern -Ctx $Ctx -Pattern $Ctx.Prompt -Seconds $ShellSeconds)) { return -1 }
   return $t
@@ -245,10 +294,9 @@ function Invoke-GuestCommand {
     [Parameter(Mandatory)][string]$Command,
     [int]$Seconds = 120
   )
-  $baseline = Get-PromptCount -Ctx $Ctx
   $before = $Ctx.Text.Length
-  Send-Line -Ctx $Ctx -Text $Command
-  $ok = Wait-ForPrompt -Ctx $Ctx -Baseline $baseline -Seconds $Seconds
+  $sent = Send-Line -Ctx $Ctx -Text $Command
+  $ok = $sent -and (Wait-ForPrompt -Ctx $Ctx -Position $before -Seconds $Seconds)
   $chunk = $Ctx.Text.ToString().Substring($before)
   # Drop the guest's echo of the command itself and the prompt that follows the
   # output. What is left is what the command actually printed.
@@ -280,7 +328,7 @@ function Stop-QemuGuest {
   param([Parameter(Mandatory)][hashtable]$Ctx, [switch]$Graceful, [int]$Seconds = 45)
   if (-not $PSCmdlet.ShouldProcess("pid $($Ctx.Process.Id)", 'stop the QEMU guest')) { return }
   if ($Graceful -and -not $Ctx.Process.HasExited) {
-    Send-Line -Ctx $Ctx -Text 'poweroff'
+    [void](Send-Line -Ctx $Ctx -Text 'poweroff')
     [void](Wait-ForPattern -Ctx $Ctx -Pattern 'Uptime|rebooting|Powering off' -Seconds 20)
     [void]$Ctx.Process.WaitForExit($Seconds * 1000)
   }

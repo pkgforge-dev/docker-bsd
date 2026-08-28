@@ -16,9 +16,9 @@ entries themselves. Do not add a "previous sessions" section.
 ## State
 
 ```text
-session started 2026-08-28T03:40:00Z, continued after an operator redirect
-baseline        an image that boots, and a provisioning step nobody could explain
-entries         total 22  open 20  blocked 0  done 2
+session started 2026-08-28T09:00:00Z
+baseline        an image that boots, and an answer to INF-09 that did not survive a repeat
+entries         total 22  open 18  blocked 0  done 4
 ```
 
 ⚠ The counts above are checked against [`INDEX.md`](INDEX.md)'s rows by
@@ -36,21 +36,27 @@ hand to make a check pass; fix whichever file is wrong. ⭐
 
 ---
 
-## ⭐ The headline: `INF-09` is answered, and the answer moves three entries
+## ⛔ The headline: yesterday's answer was withdrawn, and one repeat is what did it
 
-⛔ **Installing a compiler into the guest does not fail because of `pkg_add`.**
-Two controls settle it, same bytes, same guest, minutes apart:
+⛔ **"The destination filesystem decides whether a 490 MB write finishes" was the
+headline of four documents and it rested on a single `tar`.** Run again today,
+through the plain driver and through the instrument that took the original
+reading, ⭐ **that same `tar` onto that same ext2 root finishes in about half a
+minute.**
 
-| the same 490 MB, the same 1,664 files | result |
+| what was believed yesterday | what is measured today |
 | --- | --- |
-| `tar` onto the guest's **ext2 root** | ⛔ still running at 900 s |
-| `tar` into a **tmpfs** in that guest | ⭐ finished |
+| the ext2 root cannot take the write | ⛔ **it can.** So can a fresh 1 KB filesystem, a fresh 4 KB one, and the shipped root's own bytes mounted as data |
+| `pkg_add` is exonerated | ⛔ **it is not.** It is the only suspect left, and it reproduces every time |
+| the 1 KB block size is the lever | ⛔ **it is not.** One `mke2fs -b` apart, both finish |
 
-⭐ **It is the filesystem.** 1 KB blocks over 2 GB with no features. ⛔ **And the
-fourth reference sweep found why, in upstream's own source**: smolBSD writes
-ext2 only when the BUILD HOST is Linux, and only for the BUILDER image, which is
-the image this repository ships as its runtime root. The seconds and the
-geometry are in [`../docs/LIMITS.md`](../docs/LIMITS.md) and the readings are in
+⭐ **And `pkg_add -v` says WHERE it stops**: it prints every path in the package,
+reaches the last one, and then goes silent while the kernel reports user time
+frozen and system time tracking the wall clock. ⛔ **The unpack finishes. The
+phase after it does not.**
+
+⚠ The withdrawn wording is in [`../HISTORY/inf-09.md`](../HISTORY/inf-09.md), the
+seconds are in [`../docs/LIMITS.md`](../docs/LIMITS.md), and the readings are in
 `INF-09`. ⛔ **They are not repeated here**: one fact, one home.
 
 ---
@@ -59,100 +65,91 @@ geometry are in [`../docs/LIMITS.md`](../docs/LIMITS.md) and the readings are in
 
 **2026-08-28.**
 
-1. ⭐ **`INF-09` found, then CORRECTED by reading upstream.** Two controls said
-   the destination filesystem decides whether a 490 MB write finishes; the
-   fourth reference sweep then found the reason in smolBSD's own `mkimg.sh`:
-   ⛔ **ext2 is what it falls back to when the BUILD HOST is Linux, and only for
-   the BUILDER image**, which is the image this repository ships as its runtime
-   root.
-2. ⭐ **A fourth reference sweep, nine projects**, taking the total to 37. ⛔ **It
-   was run because the first three were never being read**: every citation to
-   them outside `HISTORY/` had arrived in the first commit.
-3. ⛔ **DragonFly dropped**, `RULES.md` decision 7. The working route and its
-   three traps are kept verbatim in
-   [`../HISTORY/dragonfly.md`](../HISTORY/dragonfly.md).
-4. ⛔ **`TODO/bsd.md` was 893 lines of corrections to corrections**, now 155
-   lines of current facts, with the reasoning moved verbatim to
-   [`../HISTORY/bsd-entries.md`](../HISTORY/bsd-entries.md).
-5. ⛔ **A claim in `docs/LIMITS.md` narrowed for the third time.** "A free
-   runner cannot use `/dev/kvm`" is wrong; **a rootless container on one cannot
-   open it** is what was measured. Somebody else runs BSD guests on free runners
-   with KVM in production.
-6. ⭐ **Two guards tightened and both seen to fail**, and one new defect filed
-   as `INF-10`.
+1. ⛔ **`INF-09` corrected for the third time**, by repeating the one control the
+   whole answer rested on. Three new experiments, each varying one thing:
+   `44` two ext2 filesystems one `mke2fs -b` apart, `45` the shipped root's own
+   bytes as a data disk and the real root as the reference, `46` the install
+   without `pkg_add`.
+2. ⭐ **The compiler goes into the guest in 46 seconds without `pkg_add`**, and
+   `pkg_info` finds it afterwards. A pkgsrc binary package is an archive with a
+   known layout and every step of it is measured.
+3. ⛔ **And then the compile failed on a defect nobody had looked for.** The
+   build guest has no `/usr/bin/as`, no `sys/cdefs.h` and no `libc.a`. ⭐ **The
+   `comp` set fixes it in about a minute**, and that gap was already written down
+   under `PERF-01` for a cross sysroot with nobody connecting the two.
+4. ⭐ **`INF-08` and `INF-10` closed together**, both halves of the console
+   driver, with the defect planted first in both languages.
+   ⚠ **The two halves had different answers**, which is the argument for testing
+   both.
+5. ⛔ **`README.md` and `docs/LIMITS.md` amended** where they told a consumer the
+   build variant was closer to usable than it is.
 
 ---
 
 ## ⭐ The work order
 
-### 1. ⛔ `INF-09`, which is answered and not closed
+### 1. ⭐ `IMG-02`, and it is now assembly rather than research
 
-⛔ **Start with the question the sweep raised, not with the filesystem.**
-Upstream treats `build-amd64.img` as a **build environment** and this repository
-ships it as a product. ⭐ **The cheapest fix may be to stop doing that**, and it
-costs no filesystem work.
+⛔ **Every step is measured and none of it is in the image.** Bake into
+[`../images/netbsd/Containerfile`](../images/netbsd/Containerfile):
 
-⭐ **Then, if the image is still the right one:** the guest root is ext2 and
-Linux owns it completely. `debugfs -R rdump` the tree out, `mke2fs -b 4096 -d` a
-new one at the size wanted, write the package in from Linux. ⛔ **No guest, no
-emulator and no provisioning step.**
+1. the `comp` set, fetched and digest-checked by
+   [`../scripts/sources`](../scripts/sources) and written into the guest root the
+   way the package already is;
+2. a provision stage that runs the `tar` recipe from
+   [`../experiments/46-install-without-pkg-add.sh`](../experiments/46-install-without-pkg-add.sh)
+   instead of `pkg_add`;
+3. ⚠ **a bigger `SMOL_BUILD_SIZE`.** The root is at 81 percent with both in.
 
-⛔ **Prove the block size is the lever before rebuilding anything.** Repeat the
-two controls against a 4 KB filesystem. A fix that works and is not understood
-is the ninth guess, and eight are already dead.
-
-⚠ **Read `usable.md`'s `R34` section first.** It carries `mkimg.sh:155`, which
-is where the filesystem is chosen, and `smoler/build.sh:245`, which is upstream
-provisioning with a **chroot** rather than a booted guest. ⛔ That tracker holds
-83 items and 51 threads and two have been read.
+⛔ **And rule on the version, do not absorb it.** The guest is
+`smolBSD 11.0_STABLE`, the `comp` set used is NetBSD **11.0**, and
+`scripts/sources` pins NetBSD **10.1** for the OCI userlands. Two versions for
+two purposes is defensible and is written down nowhere.
 
 ### 2. ⭐ `PERF-01`, which unblocks the moment 1 lands
 
-⛔ **Half of it is measured: the Linux side is 27 seconds** for
-`cc -O2 -c sqlite3.c`, three runs, in a container on this laptop.
-[`../scripts/bench-compile`](../scripts/bench-compile) runs both sides against
-the same bytes and both time themselves from the inside. ⚠ **The guest side
-needs a compiler in the image**, which is 1.
+⛔ **The Linux side is measured and the guest side has never had a compiler to
+run.** [`../scripts/bench-compile`](../scripts/bench-compile) runs both against
+the same bytes and both time themselves from the inside.
+[`../experiments/47-comp-set-and-compile.sh`](../experiments/47-comp-set-and-compile.sh)
+is the same workload with the toolchain carried in on a second disk, so the
+number can be taken before the image is rebuilt.
 
-⭐ **And user A is now a named command rather than an idea.** `apt install clang
-lld`, plus the BSD's own `base` and `comp` sets as a sysroot, plus about seventy
-lines of glue. ⛔ **No BSD host, no VM.** `usable.md`, the `R29` and `R30`
-sections. ⚠ **`scripts/sources` fetches `base` and `etc` and not `comp`**, and
-`comp` is where the headers and static libraries are.
+⭐ **And user A is a named command, not an idea.** `apt install clang lld`, plus
+the BSD's own `base` and `comp` sets as a sysroot, plus about seventy lines of
+glue. ⛔ **No BSD host, no VM.** `usable.md`, the `R29` and `R30` sections.
+⚠ **`scripts/sources` fetches `base` and `etc` and not `comp`**, the same gap
+as 1, for a different consumer.
 
-### 3. `IMG-02` closes on 2
+### 3. ⚠ `INF-09` is narrowed and not closed
 
-⭐ Its acceptance is a working `pkg_add` **plus a recorded build time**. The
-first comes from 1 and the second is 2.
+⛔ **Do not rebuild the filesystem.** Four controls say it is not the problem.
+⭐ **What would close it** is reading which loop the kernel is in after the
+unpack: `ktrace(2)` is not in this kernel, so that means a kernel with
+`options KTRACE` or reading `pkg_install`'s source for what happens between the
+last extracted file and the pkgdb write. ⚠ Neither has been done.
+
+⚠ **And decide what a consumer is told**, because `pkg_add` is in the image and
+does not work on anything large.
 
 ### 4. ⛔ `PERF-02` then `PERF-03`, and design them against the variance
 
 ⚠ **Read [`../docs/LIMITS.md`](../docs/LIMITS.md) section 1b before designing
 either.** A free runner moves by 42 percent between jobs and under 1 percent
 within one, which is eight times the gate `PERF-03` has to measure. ⛔ **Both
-sides in the same job, repeated, or the number means nothing.**
+sides in the same job, repeated, or the number means nothing.** `R30` has the
+matrix already built and puts its two sides in two jobs, which is the one thing
+to change about it.
 
 ⛔ **And every runner number this repository has taken is an emulated number**,
-because a **rootless container** on a runner cannot open `/dev/kvm`: the node
-arrives owned by `nobody`, `test -r` and `test -w` answer yes anyway, and the
-emulator's `open` fails. ⚠ **That is narrower than what was published before.**
-⭐ **A QEMU process on the runner itself DOES get KVM**, and somebody runs BSD
-guests that way in production. ⛔ **So the highest-value unknown is now
-specific**: can a container on a free runner be given a usable `/dev/kvm`?
-`usable.md`'s `R17` and `R31` sections.
+because a **rootless container** on a runner cannot open `/dev/kvm`. ⭐ **A QEMU
+process on the runner itself DOES get KVM**, so the highest-value unknown is
+specific: can a container on a free runner be given a usable one? `usable.md`'s
+`R17` and `R31` sections. ⛔ **And there is a trap waiting on the day it works**:
+`guest.py` asks for `-cpu host,+invtsc`, and a NetBSD guest on a host CPU with
+AMX jumps to address 0 while starting init. The mask is in `R31`.
 
-⛔ **And there is a trap waiting on the day it works.** With KVM the guest sees
-the host CPU, `guest.py` asks for `-cpu host,+invtsc`, and **a NetBSD guest on
-a host CPU with AMX jumps to address 0 while starting init**. The mask that
-fixes it is in the `R31` section.
-
-### 5. ⚠ `INF-08` and `INF-10`, which are one file and should move together
-
-`Console.run()` returns the right answer late; `Console.send()` never returns at
-all against a guest that has stopped draining its console. ⛔ **Both are a
-missing bound, and `console.ps1` has to move with `console.py`.**
-
-### 6. ⚠ `IMG-03`, `INF-04`, `INF-06`, and the `OPT-*` levers
+### 5. ⚠ `IMG-03`, `INF-04`, `INF-06`, and the `OPT-*` levers
 
 ⛔ **Do not pull an `OPT` lever before `PERF-02` says which layer is stuck.**
 ⚠ `OPT-02` now has numbers rather than an impression: the interpreter is bigger
@@ -160,7 +157,21 @@ than the emulator binary and exists to run 15 KB of driver.
 
 ---
 
-## ⭐ Open questions: none. Four were answered on 2026-08-27.
+## ⚠ One decision is waiting on the operator
+
+⭐ **Offered by [`../HISTORY/reviews/15-somebody-who-started-building-on-last-sessions-answer.md`](../HISTORY/reviews/15-somebody-who-started-building-on-last-sessions-answer.md)
+and not taken**, because [`RULES.md`](RULES.md) is the operator's file:
+
+⛔ **add a row saying a control that changes the direction of an entry is run
+twice before it is published.** ⚠ Not every measurement: only the ones a
+conclusion turns on, because a rule that doubles every run is a rule that gets
+ignored. `RULES.md` already says a benchmark result is a median over several
+runs; nothing says it about a diagnosis, and a wrong diagnosis publishes a wrong
+direction rather than a wrong number.
+
+---
+
+## ⭐ Open questions: none new. Four were answered on 2026-08-27
 
 ⛔ **They are settled and recorded in [`RULES.md`](RULES.md), which persists
 where this file is rewritten.** Restated here as pointers only, so the two

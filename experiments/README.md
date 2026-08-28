@@ -147,7 +147,9 @@ comment line beginning with the tool's own name is parsed as a directive.
 | [`41-connect-podman-from-windows.ps1`](41-connect-podman-from-windows.ps1) | Does the **Windows** podman client reach it, which is `BSD-01`'s acceptance | ⚠ ssh and the connection work; ⛔ the podman **daemon** does not stay up. See finding 7 |
 | [`35-boot-in-container.sh`](35-boot-in-container.sh) | ⭐ **What can a host with only a container engine do?** | ⭐ **a BSD shell in 2.6 s**, unprivileged. 0.6 s with `/dev/kvm`. See finding 8 |
 | [`42-probe-pkg-add-inside-guest.sh`](42-probe-pkg-add-inside-guest.sh) | ⛔ **`INF-09`: is `pkg_add` spinning or waiting?** Every explanation so far was inferred from OUTSIDE the guest | ⚠ **a negative result, committed.** Every instrument in it is a program, and this guest starves programs. See finding 9 |
-| [`43-siginfo-the-stuck-guest.sh`](43-siginfo-the-stuck-guest.sh) | ⭐ **The same question, asked of the KERNEL.** Ctrl-T needs no userland to be scheduled | ⭐ **it answered.** Spinning in the kernel, and it is the filesystem. See finding 9 |
+| [`43-siginfo-the-stuck-guest.sh`](43-siginfo-the-stuck-guest.sh) | ⭐ **The same question, asked of the KERNEL.** Ctrl-T needs no userland to be scheduled | ⭐ **it answered.** Spinning in the kernel: user time frozen, system time tracking the clock. ⚠ Its filesystem verdict is withdrawn. See finding 9 |
+| [`44-block-size-control.sh`](44-block-size-control.sh) | ⛔ **Is the 1 KB block size the lever, or is that guess nine?** Two ext2 filesystems one `mke2fs -b` apart | ⛔ **it is not.** Both finish, so the fix this entry was about to ship would not have been understood. See finding 9 |
+| [`45-is-it-the-root.sh`](45-is-it-the-root.sh) | ⛔ **Then is it the shipped filesystem, or being the root?** Its own bytes as a data disk, and the real root as the reference | ⛔ **neither.** All three finish, including the reference the record says does not. See finding 9 |
 | [`lib/console.ps1`](lib/console.ps1) | not an experiment | the shared serial-console driver for the Windows half. ⛔ One copy, so `33`, `40` and `41` cannot diverge |
 | [`lib/console.py`](lib/console.py) | not an experiment | ⛔ the same driver, POSIX side, carrying the same two measured tty rules |
 
@@ -438,7 +440,7 @@ the rescue image ships no `uname`. ⭐ Assert with something the guest
 actually has, and confirm what that is before writing the assertion.
 
 
-### 9. ⭐ Ask the kernel when userland has stopped answering
+### 9. ⭐ Ask the kernel when userland has stopped answering, then run the control twice
 
 ⛔ **`INF-09` had eight dead explanations and every one was a guess at one
 word**: whether the process was spinning or waiting. Nothing outside the guest
@@ -458,30 +460,51 @@ ktrace: ktrace(2) system call not supported in the running kernel;
         re-compile kernel with `options KTRACE'
 ```
 
-⭐ **SIGINFO is answered by the line discipline, in the kernel.** Ctrl-T every
-45 seconds for 1,404 seconds:
+⭐ **SIGINFO is answered by the line discipline, in the kernel.** Ctrl-T at
+`pkg_add`, and this is the reading that has survived every correction since:
 
 ```text
-t=48    load: 0.41  cmd: pkg_add 2899   15.78u    26.88s 74% 13348k
-t=1404  load: 0.41  cmd: pkg_add 2899   15.78u  1382.68s 74% 13348k
+t=48    load: 0.46  cmd: pkg_add 2899  18.45u   23.86s 77% 13348k
+t=144   load: 0.46  cmd: pkg_add 2899  18.45u  120.76s 77% 13348k
 ```
 
-⛔ **User time frozen, system time climbing one for one with the clock.** Not
-one userland instruction in 23 minutes.
+⛔ **User time frozen, system time climbing one for one with the clock**, and a
+resident size that never moves. ⭐ **A healthy run looks nothing like it**: the
+`tar` that finishes reports both numbers moving.
 
-⭐ **And then a control, which is what actually named the culprit.** The same
-490 MB, by plain `tar`, in the same guest:
+### ⛔ And then the control was run a second time, and it did not reproduce
+
+⚠ **This is the part worth carrying to another project.** The control that named
+the culprit was:
 
 ```text
 -C /var/tmp   the ext2 root    still running at 900 s
 -C /mnt/t     a tmpfs          finished
 ```
 
-⛔ **So it is neither `pkg_add` nor the guest. It is the filesystem**, which
-this repository made: `resize2fs` grew a small published image to 2 GB and
-cannot change its 1 KB block size. `INF-09` carries the geometry.
+⛔ **Run again on 2026-08-28, on the same image, through the plain driver and
+through the instrument that took the original reading, that `tar` finishes in
+about half a minute.** So the conclusion it carried, that the destination
+filesystem decides, that `pkg_add` is exonerated, that a 1 KB block size is the
+lever, is withdrawn in full.
+[`../HISTORY/inf-09.md`](../HISTORY/inf-09.md) keeps the wording.
 
-### ⚠ Three rules this cost, and they are cheap to reuse
+⭐ **Two experiments replaced it, and both are controls that vary one thing:**
+
+- [`44-block-size-control.sh`](44-block-size-control.sh) unpacks the same
+  archive onto two filesystems that are the same size, the same `-O none` and
+  the same inode density, **one `mke2fs -b` apart**, one freshly booted guest
+  each. ⛔ **Both finish.** The block size is not the lever, and rebuilding the
+  filesystem would have been a fix nobody understood.
+- [`45-is-it-the-root.sh`](45-is-it-the-root.sh) unpacks it onto the shipped
+  root's own bytes, `dd` out of the image and mounted as an ordinary data disk;
+  onto the same disk with the archive copied on first so one filesystem carries
+  both sides; and onto the real root as the reference. ⛔ **All three finish.**
+
+⭐ **So the eighth explanation, `pkg_add`'s own work, is the one left standing**,
+and it was buried by the control that will not reproduce.
+
+### ⚠ Five rules this cost, and they are cheap to reuse
 
 - ⛔ **An instrument whose failure mode is the same shape as the fault is worse
   than no instrument.** The first probe hung exactly as the fault does.
@@ -492,6 +515,14 @@ cannot change its 1 KB block size. `INF-09` carries the geometry.
 - ⛔ **`os.environ.get(name, default)` cannot see the difference between absent
   and empty.** A wrapper passing `-e VAR=` made a driver run `exec` with no
   command, which returns 0, and the run looked exactly like the frozen guest.
+- ⛔ **Silence at a console is not a wedged guest.** Ctrl-T over an idle shell
+  prints nothing, because `sh` ignores SIGINFO and there is no foreground job to
+  report on. ⚠ A command that finished and a command that stopped being
+  scheduled are the same picture through that instrument unless the command
+  carries its own completion marker.
+- ⛔ **Run the control twice.** This repository already had that rule for
+  benchmarks on a shared runner and had not applied it to a diagnosis, and one
+  unrepeated control became the headline of four documents.
 
 
 ---
